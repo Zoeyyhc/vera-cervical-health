@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "proofrun": {
+      "source": "rokabytedev/proofrun",
+      "sourceType": "github",
+      "computedHash": "2a543eb2ce29f288bc1a3b7ef55f289d2c56eced289ba663b60312c6085db6b4"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+.env*.local
+
+# Build output
+.next/
+out/
+dist/
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+
+# Testing
+playwright-report/
+test-results/
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Vercel
+.vercel/
