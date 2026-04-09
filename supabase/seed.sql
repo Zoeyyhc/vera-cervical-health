@@ -1,0 +1,2 @@
+-- Supabase seed file
+-- This file runs after migrations to populate initial data for development
