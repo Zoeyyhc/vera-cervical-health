@@ -9,14 +9,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Design system tokens
         cream: "#f7f4ed",
         charcoal: "#1c1c1c",
         "off-white": "#fcfbf8",
         "muted-gray": "#5f5f5d",
-        border: "#eceae4",
-      },
-      backgroundColor: {
-        DEFAULT: "#f7f4ed",
+        // shadcn/ui CSS variable bridge
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        card: { DEFAULT: "var(--card)", foreground: "var(--card-foreground)" },
+        popover: { DEFAULT: "var(--popover)", foreground: "var(--popover-foreground)" },
+        primary: { DEFAULT: "var(--primary)", foreground: "var(--primary-foreground)" },
+        secondary: { DEFAULT: "var(--secondary)", foreground: "var(--secondary-foreground)" },
+        muted: { DEFAULT: "var(--muted)", foreground: "var(--muted-foreground)" },
+        accent: { DEFAULT: "var(--accent)", foreground: "var(--accent-foreground)" },
+        destructive: { DEFAULT: "var(--destructive)", foreground: "var(--destructive-foreground)" },
+        border: "var(--border)",
+        input: "var(--input)",
+        ring: "var(--ring)",
       },
       fontFamily: {
         sans: ["var(--font-camera)", "ui-sans-serif", "system-ui"],

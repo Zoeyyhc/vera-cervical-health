@@ -1,14 +1,10 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import { Geist } from "next/font/google";
-import { cn } from "@/lib/utils";
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
-
 
 // Camera Plain Variable — place the licensed font file at app/fonts/CameraPlainVariable.otf
-// (or .woff2). Replace the placeholder src when the real font is available.
+// (or .woff2). The current file is a placeholder; replace with the real font when licensed.
+// No Google Fonts — ui-sans-serif / system-ui are the fallback chain.
 const cameraPlain = localFont({
   src: "./fonts/CameraPlainVariable.otf",
   variable: "--font-camera",
@@ -27,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    <html lang="en" className={cameraPlain.variable}>
       <body className="bg-cream text-charcoal font-sans antialiased">
         {children}
       </body>
