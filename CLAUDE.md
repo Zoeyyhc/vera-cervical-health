@@ -184,6 +184,29 @@ This applies to: Google Maps, NewsAPI, SerpAPI.
 - Biome is the sole linter/formatter — do not use ESLint or Prettier
 - Run `pnpm biome check --write .` before committing
 
+### Verification (Proofrun)
+After implementing any change that has UI acceptance criteria, run `/proofrun` to produce auditable evidence of the behavior. Proofrun interacts with the running app in a simulator/emulator, captures screenshots at each step, and generates an interactive HTML report for human review.
+
+Trigger proofrun when:
+- You have finished implementing a feature or bug fix with verifiable UI acceptance criteria
+- The user asks you to verify app behavior (e.g. "check if it works", "verify the flow")
+
+Quick reference:
+```bash
+npx proofrun info          # Check readiness and active sessions
+npx proofrun --help        # Full command reference
+```
+
+Workflow summary:
+1. `npx proofrun info` — confirm diagnostics pass
+2. `npx proofrun session start --change <slug> --device <id>` — lock a device and start a session
+3. Record prerequisites, build a verification plan (`npx proofrun plan add`), then verify each criterion with steps + screenshots + judgments
+4. `npx proofrun session stop` — release the device lock
+5. `npx proofrun report --change <slug>` — generate the HTML report
+6. `npx proofrun serve --change <slug>` — serve the report for human review; wait for feedback
+
+Every judgment must be preceded by at least one screenshot. Never judge a criterion without visual evidence.
+
 ---
 
 ## Constraints
