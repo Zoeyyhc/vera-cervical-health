@@ -4,9 +4,7 @@ export default function Home() {
       <h1 className="text-4xl font-semibold text-charcoal tracking-tight">
         Cervix Health Assistant
       </h1>
-      <p className="mt-4 text-lg text-muted-gray">
-        Your cervical health education platform.
-      </p>
+      <p className="mt-4 text-lg text-muted-gray">Your cervical health education platform.</p>
     </main>
   );
 }

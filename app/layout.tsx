@@ -24,9 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={cameraPlain.variable}>
-      <body className="bg-cream text-charcoal font-sans antialiased">
-        {children}
-      </body>
+      <body className="bg-cream text-charcoal font-sans antialiased">{children}</body>
     </html>
   );
 }
