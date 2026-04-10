@@ -22,6 +22,6 @@
     }
   },
   "files": {
-    "ignore": ["node_modules", ".next", "dist"]
+    "ignore": ["node_modules", ".next", "dist", "types/supabase.ts"]
   }
 }
