@@ -31,3 +31,9 @@ next-env.d.ts
 
 # OS
 .DS_Store
+
+# Git worktrees
+.worktrees/
+
+# Brainstorm session files
+.superpowers/
