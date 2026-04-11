@@ -29,14 +29,14 @@ test.describe("Register page", () => {
     await expect(page.getByText("Please enter a valid email address")).toBeVisible();
   });
 
-  test("valid registration redirects to /chat", async ({ page }) => {
+  test("valid registration shows email confirmation screen", async ({ page }) => {
     const email = uniqueEmail();
     await page.goto("/register");
     await page.fill('[name="email"]', email);
     await page.fill('[name="password"]', "Password123!");
     await page.fill('[name="confirmPassword"]', "Password123!");
     await page.click('[type="submit"]');
-    await expect(page).toHaveURL("/chat");
+    await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
   });
 
   test("already-registered email shows server error", async ({ page }) => {
@@ -47,7 +47,7 @@ test.describe("Register page", () => {
     await page.fill('[name="password"]', "Password123!");
     await page.fill('[name="confirmPassword"]', "Password123!");
     await page.click('[type="submit"]');
-    await expect(page).toHaveURL("/chat");
+    await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
 
     // Second registration with same email
     await page.goto("/register");
