@@ -10,6 +10,8 @@ import {
   useFormContext,
 } from "react-hook-form";
 
+import { Slot } from "@radix-ui/react-slot";
+
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
@@ -92,21 +94,22 @@ const FormLabel = React.forwardRef<HTMLLabelElement, React.ComponentPropsWithout
 );
 FormLabel.displayName = "FormLabel";
 
-const FormControl = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ ...props }, ref) => {
-    const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
+const FormControl = React.forwardRef<
+  React.ElementRef<typeof Slot>,
+  React.ComponentPropsWithoutRef<typeof Slot>
+>(({ ...props }, ref) => {
+  const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
 
-    return (
-      <div
-        ref={ref}
-        id={formItemId}
-        aria-describedby={!error ? formDescriptionId : `${formDescriptionId} ${formMessageId}`}
-        aria-invalid={!!error}
-        {...props}
-      />
-    );
-  }
-);
+  return (
+    <Slot
+      ref={ref}
+      id={formItemId}
+      aria-describedby={!error ? formDescriptionId : `${formDescriptionId} ${formMessageId}`}
+      aria-invalid={!!error}
+      {...props}
+    />
+  );
+});
 FormControl.displayName = "FormControl";
 
 const FormDescription = React.forwardRef<
