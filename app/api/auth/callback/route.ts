@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 // app/api/auth/callback/route.ts
 import type { EmailOtpType } from "@supabase/supabase-js";
-import { type NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -16,9 +16,9 @@ export async function GET(request: NextRequest) {
       type,
     });
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      return Response.redirect(`${origin}${next}`);
     }
   }
 
-  return NextResponse.redirect(`${origin}/login?error=link-expired`);
+  return Response.redirect(`${origin}/login?error=link-expired`);
 }
