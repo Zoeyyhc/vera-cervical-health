@@ -4,9 +4,7 @@ import { expect, test } from "@playwright/test";
 test.describe("Register page", () => {
   const uniqueEmail = () => `e2e-register-${Date.now()}@test.local`;
 
-  test("renders email, password, and confirm password fields", async ({
-    page,
-  }) => {
+  test("renders email, password, and confirm password fields", async ({ page }) => {
     await page.goto("/register");
     await expect(page.getByLabel("Email")).toBeVisible();
     await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
@@ -28,9 +26,7 @@ test.describe("Register page", () => {
     await page.fill('[name="password"]', "Password123!");
     await page.fill('[name="confirmPassword"]', "Password123!");
     await page.click('[type="submit"]');
-    await expect(
-      page.getByText("Please enter a valid email address"),
-    ).toBeVisible();
+    await expect(page.getByText("Please enter a valid email address")).toBeVisible();
   });
 
   test("valid registration redirects to /chat", async ({ page }) => {

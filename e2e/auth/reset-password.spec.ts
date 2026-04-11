@@ -2,9 +2,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Reset password page", () => {
-  test("redirects to /forgot-password when there is no active session", async ({
-    page,
-  }) => {
+  test("redirects to /forgot-password when there is no active session", async ({ page }) => {
     // Navigate directly without going through the email link
     await page.goto("/reset-password");
     await expect(page).toHaveURL("/forgot-password");

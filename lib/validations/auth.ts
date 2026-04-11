@@ -1,5 +1,8 @@
 // lib/validations/auth.ts
-import { z } from "zod";
+// Import from zod/v3 so that @hookform/resolvers' zodResolver Zod-v3 overload
+// matches correctly.  Zod 4.x ships zod/v3 as a first-class compatibility
+// sub-path; the runtime behaviour is identical to `import { z } from "zod"`.
+import { z } from "zod/v3";
 
 export const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
