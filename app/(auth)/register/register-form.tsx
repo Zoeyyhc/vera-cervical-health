@@ -15,13 +15,12 @@ import { createClient } from "@/lib/supabase/browser";
 import { type RegisterFormValues, registerSchema } from "@/lib/validations/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 export function RegisterForm() {
-  const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -39,7 +38,29 @@ export function RegisterForm() {
       setServerError(error.message);
       return;
     }
-    router.push("/chat");
+    setEmailSent(true);
+  }
+
+  if (emailSent) {
+    return (
+      <div className="space-y-4">
+        <p className="text-[11px] uppercase tracking-[0.08em] text-muted-gray mb-3">
+          Cervix Health
+        </p>
+        <h1 className="text-[28px] font-semibold text-charcoal tracking-[-0.5px]">
+          Check your email
+        </h1>
+        <p className="text-sm text-muted-gray">
+          We sent a confirmation link to your inbox. Click it to activate your account.
+        </p>
+        <p className="text-[13px] text-muted-gray">
+          Already confirmed?{" "}
+          <Link href="/login" className="text-charcoal underline underline-offset-2">
+            Sign in
+          </Link>
+        </p>
+      </div>
+    );
   }
 
   return (
