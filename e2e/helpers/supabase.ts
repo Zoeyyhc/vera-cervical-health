@@ -17,11 +17,22 @@ export async function createTestUser(email: string, password: string): Promise<s
     password,
     email_confirm: true,
   });
-  if (error) throw new Error(`createTestUser failed: ${error.message}`);
-  return data.user.id;
+  if (!error) return data.user.id;
+
+  // If the user already exists (e.g. from a previous interrupted run), look them up
+  if (error.message.includes("already been registered")) {
+    const { data: list } = await supabase.auth.admin.listUsers();
+    const existing = list?.users?.find((u) => u.email === email);
+    if (existing) return existing.id;
+  }
+
+  throw new Error(`createTestUser failed: ${error.message}`);
 }
 
 export async function deleteTestUser(userId: string): Promise<void> {
+  if (!userId) return;
   const supabase = getAdminClient();
+  // Remove profile first to avoid FK constraint blocking auth user deletion
+  await supabase.from("profiles").delete().eq("id", userId);
   await supabase.auth.admin.deleteUser(userId);
 }
