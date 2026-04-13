@@ -1,18 +1,13 @@
+import { decideRedirect, isAdminPath } from "@/lib/auth/route-rules";
+import type { Database } from "@/types/supabase";
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
-
-// URL paths for app/(app)/* — route group parentheses don't appear in the URL.
-const PROTECTED_PATHS = ["/chat", "/clinics", "/learn", "/profile", "/admin"];
-
-function isProtected(pathname: string): boolean {
-  return PROTECTED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
 
 export async function middleware(request: NextRequest) {
   // supabaseResponse must be returned so cookie mutations from setAll() reach the browser.
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     // biome-ignore lint/style/noNonNullAssertion: env vars are always set in middleware
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     // biome-ignore lint/style/noNonNullAssertion: env vars are always set in middleware
@@ -40,9 +35,28 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && isProtected(request.nextUrl.pathname)) {
+  const pathname = request.nextUrl.pathname;
+
+  // Only query profiles.role when actually needed (admin gate).
+  let isAdmin = false;
+  if (user && isAdminPath(pathname)) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    isAdmin = profile?.role === "admin";
+  }
+
+  const decision = decideRedirect({
+    pathname,
+    isAuthenticated: !!user,
+    isAdmin,
+  });
+
+  if (decision.type === "redirect") {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = decision.to;
     return NextResponse.redirect(url);
   }
 
@@ -50,5 +64,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    // Match everything except: Next internals, favicon, static image assets, and /api/webhooks.
+    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };
