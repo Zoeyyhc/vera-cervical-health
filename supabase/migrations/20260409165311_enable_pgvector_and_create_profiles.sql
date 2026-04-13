@@ -62,17 +62,3 @@ drop trigger if exists profiles_set_updated_at on public.profiles;
 create trigger profiles_set_updated_at
   before update on public.profiles
   for each row execute function public.handle_profile_updated_at();
-
--- RLS
-alter table public.profiles enable row level security;
-
--- A user can read their own profile; admins can read any profile
-create policy "profiles: self or admin can select"
-  on public.profiles for select
-  using (auth.uid() = id or public.is_admin());
-
--- A user can update their own profile; admins can update any
-create policy "profiles: self or admin can update"
-  on public.profiles for update
-  using (auth.uid() = id or public.is_admin())
-  with check (auth.uid() = id or public.is_admin());
