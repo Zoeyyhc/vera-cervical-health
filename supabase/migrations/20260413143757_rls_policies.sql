@@ -15,12 +15,14 @@ alter table public.profiles enable row level security;
 -- A user can read their own row; admins can read every row.
 create policy "profiles: self or admin can select"
   on public.profiles for select
+  to authenticated
   using (auth.uid() = id or public.is_admin());
 
 -- A user can update their own row; admins can update any row.
 -- The WITH CHECK mirrors USING so a user can't re-target the row to another id.
 create policy "profiles: self or admin can update"
   on public.profiles for update
+  to authenticated
   using (auth.uid() = id or public.is_admin())
   with check (auth.uid() = id or public.is_admin());
 
