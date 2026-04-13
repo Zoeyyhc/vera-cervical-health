@@ -137,16 +137,13 @@ describe.runIf(canRun)("RLS policies (#12)", () => {
         .from("profiles")
         .update({ locale: "fr" })
         .eq("id", userBId);
-      // RLS update-mismatch surfaces as either an error or a 0-row update.
-      // Either way the row must be unchanged.
+      // RLS update-mismatch: either a PGRST error or a silent 0-row update — both acceptable.
       const { data } = await admin
         .from("profiles")
         .select("locale")
         .eq("id", userBId)
         .single();
       expect(data?.locale).not.toBe("fr");
-      // Explicit: the error path is acceptable; the silent 0-row path is too.
-      expect(error === null || typeof error === "object").toBe(true);
     });
 
     it("admin can read every profile", async () => {
@@ -183,6 +180,7 @@ describe.runIf(canRun)("RLS policies (#12)", () => {
         .single();
       expect(error).toBeNull();
       userBSession = data?.id as string;
+      expect(userBSession).toBeTruthy();
     });
 
     it("user A cannot create a chat session owned by user B", async () => {
@@ -313,29 +311,29 @@ describe.runIf(canRun)("RLS policies (#12)", () => {
     });
 
     it("non-admin user cannot UPDATE a knowledge_chunk", async () => {
-      const { error } = await userAClient
+      await userAClient
         .from("knowledge_chunks")
         .update({ source: "tampered" })
         .in("id", createdChunkIds);
+      // RLS blocks the update (either a PGRST error or silent 0-row update).
       const { data } = await admin
         .from("knowledge_chunks")
         .select("source")
         .in("id", createdChunkIds);
       expect(data?.every((r) => r.source !== "tampered")).toBe(true);
-      expect(error === null || typeof error === "object").toBe(true);
     });
 
     it("non-admin user cannot DELETE a knowledge_chunk", async () => {
-      const { error } = await userAClient
+      await userAClient
         .from("knowledge_chunks")
         .delete()
         .in("id", createdChunkIds);
+      // RLS blocks the delete (either a PGRST error or silent 0-row delete).
       const { data } = await admin
         .from("knowledge_chunks")
         .select("id")
         .in("id", createdChunkIds);
       expect(data?.length).toBe(1);
-      expect(error === null || typeof error === "object").toBe(true);
     });
 
     it("admin user can INSERT a knowledge_chunk", async () => {
