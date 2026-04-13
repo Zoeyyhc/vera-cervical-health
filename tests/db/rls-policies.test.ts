@@ -124,25 +124,14 @@ describe.runIf(canRun)("RLS policies (#12)", () => {
         .eq("id", userAId);
       expect(error).toBeNull();
 
-      const { data } = await admin
-        .from("profiles")
-        .select("locale")
-        .eq("id", userAId)
-        .single();
+      const { data } = await admin.from("profiles").select("locale").eq("id", userAId).single();
       expect(data?.locale).toBe("zh");
     });
 
     it("user cannot update another user's profile", async () => {
-      const { error } = await userAClient
-        .from("profiles")
-        .update({ locale: "fr" })
-        .eq("id", userBId);
+      await userAClient.from("profiles").update({ locale: "fr" }).eq("id", userBId);
       // RLS update-mismatch: either a PGRST error or a silent 0-row update — both acceptable.
-      const { data } = await admin
-        .from("profiles")
-        .select("locale")
-        .eq("id", userBId)
-        .single();
+      const { data } = await admin.from("profiles").select("locale").eq("id", userBId).single();
       expect(data?.locale).not.toBe("fr");
     });
 
@@ -195,9 +184,7 @@ describe.runIf(canRun)("RLS policies (#12)", () => {
     });
 
     it("user A can read only their own chat sessions", async () => {
-      const { data, error } = await userAClient
-        .from("chat_sessions")
-        .select("id, user_id");
+      const { data, error } = await userAClient.from("chat_sessions").select("id, user_id");
       expect(error).toBeNull();
       expect(data?.every((row) => row.user_id === userAId)).toBe(true);
       expect(data?.some((row) => row.id === userASession)).toBe(true);
@@ -231,10 +218,7 @@ describe.runIf(canRun)("RLS policies (#12)", () => {
     });
 
     it("user A can delete their own session (and cascade its messages)", async () => {
-      const { error } = await userAClient
-        .from("chat_sessions")
-        .delete()
-        .eq("id", userASession);
+      const { error } = await userAClient.from("chat_sessions").delete().eq("id", userASession);
       expect(error).toBeNull();
       const { data } = await admin
         .from("chat_sessions")
@@ -260,7 +244,7 @@ describe.runIf(canRun)("RLS policies (#12)", () => {
         .select("id, session_id")
         .eq("session_id", userBSession);
       expect(error).toBeNull();
-      expect((data?.length ?? 0)).toBeGreaterThan(0);
+      expect(data?.length ?? 0).toBeGreaterThan(0);
     });
   });
 
@@ -324,15 +308,9 @@ describe.runIf(canRun)("RLS policies (#12)", () => {
     });
 
     it("non-admin user cannot DELETE a knowledge_chunk", async () => {
-      await userAClient
-        .from("knowledge_chunks")
-        .delete()
-        .in("id", createdChunkIds);
+      await userAClient.from("knowledge_chunks").delete().in("id", createdChunkIds);
       // RLS blocks the delete (either a PGRST error or silent 0-row delete).
-      const { data } = await admin
-        .from("knowledge_chunks")
-        .select("id")
-        .in("id", createdChunkIds);
+      const { data } = await admin.from("knowledge_chunks").select("id").in("id", createdChunkIds);
       expect(data?.length).toBe(1);
     });
 
@@ -369,9 +347,7 @@ describe.runIf(canRun)("RLS policies (#12)", () => {
     });
 
     it("non-admin user cannot SELECT analytics events", async () => {
-      const { data, error } = await userAClient
-        .from("analytics_events")
-        .select("id");
+      const { data, error } = await userAClient.from("analytics_events").select("id");
       // Either an error or an empty result — both acceptable, both mean denied.
       expect(error !== null || (data?.length ?? 0) === 0).toBe(true);
     });
@@ -381,7 +357,7 @@ describe.runIf(canRun)("RLS policies (#12)", () => {
         .from("analytics_events")
         .select("id, user_id, event_type");
       expect(error).toBeNull();
-      expect((data?.length ?? 0)).toBeGreaterThan(0);
+      expect(data?.length ?? 0).toBeGreaterThan(0);
       expect(data?.some((row) => row.user_id === userAId)).toBe(true);
     });
   });
