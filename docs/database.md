@@ -99,16 +99,21 @@ Three roles, enforced at the database level via RLS policies in
 | `profiles` | ✗ | SELECT, UPDATE | ✗ | SELECT all, UPDATE all |
 | `chat_sessions` | ✗ | ALL (owned) | ✗ | SELECT all |
 | `chat_messages` | ✗ | ALL (via owned session) | ✗ | SELECT all |
-| `knowledge_chunks` | ✗ | SELECT | SELECT | SELECT, INSERT, UPDATE, DELETE |
-| `analytics_events` | ✗ | INSERT own | ✗ | SELECT all |
+| `knowledge_chunks` | ✗ | SELECT (all rows) | — | SELECT, INSERT, UPDATE, DELETE |
+| `analytics_events` | ✗ | INSERT (self-attributed) | ✗ | SELECT all |
 
 `profiles` has no INSERT/DELETE policy — rows are created by the
 `handle_new_user` trigger on `auth.users` (SECURITY DEFINER, bypasses RLS)
 and deleted by FK cascade when the auth user is removed.
 
-`analytics_events` has no UPDATE/DELETE policy — it is append-only for audit
-purposes. GDPR account-deletion nulls the `user_id` via `ON DELETE SET NULL`
-rather than deleting the row.
+`knowledge_chunks` has no `user_id` column — there is no per-user ownership.
+All authenticated users share one read view; "self/other" distinction does not apply.
+
+`analytics_events` INSERT uses a `WITH CHECK (auth.uid() = user_id)` constraint —
+the DB rejects any insert where the submitted `user_id` does not match the caller's
+UID. It is not a row-filter; it is a write guard. The table has no UPDATE/DELETE
+policy — it is append-only for audit purposes. GDPR account-deletion nulls the
+`user_id` via `ON DELETE SET NULL` rather than deleting the row.
 
 **Never bypass RLS with the service role key in routes accessible to
 non-admin users.** Admin routes check `profiles.role` server-side before
