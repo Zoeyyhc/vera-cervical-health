@@ -83,15 +83,36 @@ const { data } = await supabase.rpc("match_knowledge_chunks", {
 
 ## RLS Roles & Permissions
 
+Three roles, enforced at the database level via RLS policies in
+`supabase/migrations/20260413143757_rls_policies.sql`:
+
 | Role | Description | Key Permissions |
 |---|---|---|
-| `guest` | Unauthenticated or unregistered user | Read health hub, 5-message chat limit, clinic finder |
-| `user` | Registered, authenticated user | Full chat history, profile management, save clinics |
-| `admin` | Platform administrator | User management, analytics, knowledge base uploads |
+| `guest` | Unauthenticated visitor. JWT claim `role=anon` | No DB access — all policies require `to authenticated`. Guest UX (clinics finder, public learn pages) reads via server-side proxy routes. |
+| `user` | Authenticated registered user (`profiles.role = 'user'`) | Read/update own profile. Full CRUD on own `chat_sessions` and `chat_messages`. Read `knowledge_chunks`. Insert own `analytics_events`. |
+| `admin` | Platform administrator (`profiles.role = 'admin'`) | Everything `user` has, plus: read all profiles, read all chat sessions/messages, full CRUD on `knowledge_chunks`, read all `analytics_events`. Admins cannot mutate other users' chat rows via RLS — admin tooling that writes user data must use the service role key. |
 
-RLS policies are enforced at the database level on all tables. Never bypass RLS with the service role key in routes accessible to non-admin users.
+### Per-table policy matrix
 
-Admin routes check the `profiles.role` column server-side on every request before allowing access.
+| Table | `anon` | `user` (self) | `user` (other) | `admin` |
+|---|---|---|---|---|
+| `profiles` | ✗ | SELECT, UPDATE | ✗ | SELECT all, UPDATE all |
+| `chat_sessions` | ✗ | ALL (owned) | ✗ | SELECT all |
+| `chat_messages` | ✗ | ALL (via owned session) | ✗ | SELECT all |
+| `knowledge_chunks` | ✗ | SELECT | SELECT | SELECT, INSERT, UPDATE, DELETE |
+| `analytics_events` | ✗ | INSERT own | ✗ | SELECT all |
+
+`profiles` has no INSERT/DELETE policy — rows are created by the
+`handle_new_user` trigger on `auth.users` (SECURITY DEFINER, bypasses RLS)
+and deleted by FK cascade when the auth user is removed.
+
+`analytics_events` has no UPDATE/DELETE policy — it is append-only for audit
+purposes. GDPR account-deletion nulls the `user_id` via `ON DELETE SET NULL`
+rather than deleting the row.
+
+**Never bypass RLS with the service role key in routes accessible to
+non-admin users.** Admin routes check `profiles.role` server-side before
+switching to the service role.
 
 ## Conventions
 
