@@ -11,6 +11,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { createClient } from "@/lib/supabase/browser";
 import { type PasswordFormValues, passwordSchema } from "@/lib/validations/profile";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -73,8 +74,7 @@ export function PasswordForm() {
               <FormItem>
                 <FormLabel>New password</FormLabel>
                 <FormControl>
-                  <Input
-                    type="password"
+                  <PasswordInput
                     autoComplete="new-password"
                     placeholder="Min. 8 characters"
                     {...field}
@@ -91,8 +91,7 @@ export function PasswordForm() {
               <FormItem>
                 <FormLabel>Confirm new password</FormLabel>
                 <FormControl>
-                  <Input
-                    type="password"
+                  <PasswordInput
                     autoComplete="new-password"
                     placeholder="Re-enter your new password"
                     {...field}

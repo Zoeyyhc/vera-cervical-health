@@ -11,6 +11,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { createClient } from "@/lib/supabase/browser";
 import { type RegisterFormValues, registerSchema } from "@/lib/validations/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -108,7 +109,7 @@ export function RegisterForm() {
               <FormItem>
                 <FormLabel>Password</FormLabel>
                 <FormControl>
-                  <Input type="password" placeholder="Min. 8 characters" {...field} />
+                  <PasswordInput placeholder="Min. 8 characters" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -121,7 +122,7 @@ export function RegisterForm() {
               <FormItem>
                 <FormLabel>Confirm password</FormLabel>
                 <FormControl>
-                  <Input type="password" placeholder="Re-enter your password" {...field} />
+                  <PasswordInput placeholder="Re-enter your password" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

@@ -11,6 +11,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { createClient } from "@/lib/supabase/browser";
 import { type ResetPasswordFormValues, resetPasswordSchema } from "@/lib/validations/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -82,7 +83,7 @@ export function ResetPasswordForm() {
               <FormItem>
                 <FormLabel>New password</FormLabel>
                 <FormControl>
-                  <Input type="password" placeholder="Min. 8 characters" {...field} />
+                  <PasswordInput placeholder="Min. 8 characters" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -95,7 +96,7 @@ export function ResetPasswordForm() {
               <FormItem>
                 <FormLabel>Confirm new password</FormLabel>
                 <FormControl>
-                  <Input type="password" placeholder="Re-enter your new password" {...field} />
+                  <PasswordInput placeholder="Re-enter your new password" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
