@@ -1,38 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { LOCALES, type Locale, passwordSchema, profileInfoSchema } from "./profile";
-
-describe("LOCALES", () => {
-  it("contains exactly en and zh", () => {
-    expect(LOCALES).toEqual(["en", "zh"]);
-  });
-});
+import { passwordSchema, profileInfoSchema } from "./profile";
 
 describe("profileInfoSchema", () => {
-  it("accepts a valid English profile", () => {
-    const result = profileInfoSchema.safeParse({
-      displayName: "Alice",
-      locale: "en",
-    });
+  it("accepts a valid display name", () => {
+    const result = profileInfoSchema.safeParse({ displayName: "Alice" });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.displayName).toBe("Alice");
-      expect(result.data.locale).toBe("en");
     }
   });
 
-  it("accepts a valid Chinese profile", () => {
-    const result = profileInfoSchema.safeParse({
-      displayName: "B",
-      locale: "zh",
-    });
+  it("accepts a single character", () => {
+    const result = profileInfoSchema.safeParse({ displayName: "B" });
     expect(result.success).toBe(true);
   });
 
   it("trims surrounding whitespace on displayName", () => {
-    const result = profileInfoSchema.safeParse({
-      displayName: "  Alice  ",
-      locale: "en",
-    });
+    const result = profileInfoSchema.safeParse({ displayName: "  Alice  " });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.displayName).toBe("Alice");
@@ -40,10 +24,7 @@ describe("profileInfoSchema", () => {
   });
 
   it("rejects an empty displayName", () => {
-    const result = profileInfoSchema.safeParse({
-      displayName: "",
-      locale: "en",
-    });
+    const result = profileInfoSchema.safeParse({ displayName: "" });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0].message).toBe("Display name is required");
@@ -52,18 +33,12 @@ describe("profileInfoSchema", () => {
   });
 
   it("rejects a whitespace-only displayName after trim", () => {
-    const result = profileInfoSchema.safeParse({
-      displayName: "     ",
-      locale: "en",
-    });
+    const result = profileInfoSchema.safeParse({ displayName: "     " });
     expect(result.success).toBe(false);
   });
 
   it("rejects a displayName longer than 60 characters", () => {
-    const result = profileInfoSchema.safeParse({
-      displayName: "a".repeat(61),
-      locale: "en",
-    });
+    const result = profileInfoSchema.safeParse({ displayName: "a".repeat(61) });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0].message).toBe("Display name must be 60 characters or fewer");
@@ -71,19 +46,8 @@ describe("profileInfoSchema", () => {
   });
 
   it("accepts a displayName of exactly 60 characters", () => {
-    const result = profileInfoSchema.safeParse({
-      displayName: "a".repeat(60),
-      locale: "en",
-    });
+    const result = profileInfoSchema.safeParse({ displayName: "a".repeat(60) });
     expect(result.success).toBe(true);
-  });
-
-  it("rejects an unknown locale", () => {
-    const result = profileInfoSchema.safeParse({
-      displayName: "Alice",
-      locale: "fr" as unknown as Locale,
-    });
-    expect(result.success).toBe(false);
   });
 });
 

@@ -1,6 +1,5 @@
 // app/(app)/profile/page.tsx
 import { createClient } from "@/lib/supabase/server";
-import type { Locale } from "@/lib/validations/profile";
 import { PasswordForm } from "./password-form";
 import { ProfileInfoForm } from "./profile-info-form";
 
@@ -19,13 +18,11 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, locale")
+    .select("display_name")
     .eq("id", user.id)
     .single();
 
   const initialDisplayName = profile?.display_name ?? "";
-  const initialLocale: Locale =
-    profile?.locale === "zh" || profile?.locale === "en" ? profile.locale : "en";
 
   return (
     <main className="min-h-screen bg-cream px-6 py-10">
@@ -39,11 +36,7 @@ export default async function ProfilePage() {
           </h1>
         </header>
 
-        <ProfileInfoForm
-          email={user.email ?? ""}
-          initialDisplayName={initialDisplayName}
-          initialLocale={initialLocale}
-        />
+        <ProfileInfoForm email={user.email ?? ""} initialDisplayName={initialDisplayName} />
 
         <PasswordForm />
       </div>

@@ -3,18 +3,12 @@
 // matches correctly, same pattern as lib/validations/auth.ts.
 import { z } from "zod/v3";
 
-export const LOCALES = ["en", "zh"] as const;
-export type Locale = (typeof LOCALES)[number];
-
 export const profileInfoSchema = z.object({
   displayName: z
     .string()
     .trim()
     .min(1, "Display name is required")
     .max(60, "Display name must be 60 characters or fewer"),
-  locale: z.enum(LOCALES, {
-    errorMap: () => ({ message: "Please choose a language" }),
-  }),
 });
 
 export const passwordSchema = z
