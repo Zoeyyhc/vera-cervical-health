@@ -18,10 +18,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 export function ResetPasswordForm() {
   const router = useRouter();
-  const [serverError, setServerError] = useState<string | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
@@ -41,13 +41,12 @@ export function ResetPasswordForm() {
   });
 
   async function onSubmit(values: ResetPasswordFormValues) {
-    setServerError(null);
     const supabase = createClient();
     const { error } = await supabase.auth.updateUser({
       password: values.password,
     });
     if (error) {
-      setServerError(error.message);
+      toast.error(error.message);
       return;
     }
     router.push("/login?reset=success");
@@ -64,15 +63,6 @@ export function ResetPasswordForm() {
         Set new password
       </h1>
       <p className="text-sm text-muted-gray mb-8">Choose a strong password for your account</p>
-
-      {serverError && (
-        <div
-          role="alert"
-          className="mb-4 rounded-standard border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-        >
-          {serverError}
-        </div>
-      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

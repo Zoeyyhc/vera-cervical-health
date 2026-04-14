@@ -17,16 +17,20 @@ import { type LoginFormValues, loginSchema } from "@/lib/validations/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [serverError, setServerError] = useState<string | null>(null);
-
-  const showResetSuccess = searchParams.get("reset") === "success";
-  const showLinkExpired = searchParams.get("error") === "link-expired";
+  useEffect(() => {
+    if (searchParams.get("reset") === "success") {
+      toast.success("Password updated — sign in below");
+    } else if (searchParams.get("error") === "link-expired") {
+      toast.error("Reset link has expired — request a new one");
+    }
+  }, [searchParams]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -34,11 +38,10 @@ export function LoginForm() {
   });
 
   async function onSubmit(values: LoginFormValues) {
-    setServerError(null);
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword(values);
     if (error) {
-      setServerError(error.message);
+      toast.error(error.message);
       return;
     }
     router.push("/chat");
@@ -51,28 +54,6 @@ export function LoginForm() {
         Welcome back
       </h1>
       <p className="text-sm text-muted-gray mb-8">Sign in to your account</p>
-
-      {showResetSuccess && (
-        <output className="block mb-4 rounded-standard border border-green-300/30 bg-green-50/50 px-3 py-2.5 text-sm text-green-700">
-          Password updated — sign in below
-        </output>
-      )}
-      {showLinkExpired && (
-        <div
-          role="alert"
-          className="mb-4 rounded-standard border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-        >
-          Reset link has expired — request a new one
-        </div>
-      )}
-      {serverError && (
-        <div
-          role="alert"
-          className="mb-4 rounded-standard border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-        >
-          {serverError}
-        </div>
-      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

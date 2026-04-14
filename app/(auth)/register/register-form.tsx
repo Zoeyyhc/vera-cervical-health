@@ -18,9 +18,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 export function RegisterForm() {
-  const [serverError, setServerError] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
 
   const form = useForm<RegisterFormValues>({
@@ -29,14 +29,13 @@ export function RegisterForm() {
   });
 
   async function onSubmit(values: RegisterFormValues) {
-    setServerError(null);
     const supabase = createClient();
     const { error } = await supabase.auth.signUp({
       email: values.email,
       password: values.password,
     });
     if (error) {
-      setServerError(error.message);
+      toast.error(error.message);
       return;
     }
     setEmailSent(true);
@@ -71,15 +70,6 @@ export function RegisterForm() {
         Create account
       </h1>
       <p className="text-sm text-muted-gray mb-8">Start your health journey</p>
-
-      {serverError && (
-        <div
-          role="alert"
-          className="mb-4 rounded-standard border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-        >
-          {serverError}
-        </div>
-      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

@@ -1,3 +1,4 @@
+import { Toaster } from "@/components/ui/sonner";
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -17,7 +18,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-cream text-charcoal font-sans antialiased">{children}</body>
+      <body className="bg-cream text-charcoal font-sans antialiased">
+        {children}
+        <Toaster position="bottom-center" />
+      </body>
     </html>
   );
 }

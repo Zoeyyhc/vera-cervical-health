@@ -15,8 +15,9 @@ import { createClient } from "@/lib/supabase/browser";
 import { type ProfileInfoFormValues, profileInfoSchema } from "@/lib/validations/profile";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { useForm } from "react-hook-form";
+
+import { toast } from "sonner";
 
 type Props = {
   email: string;
@@ -25,8 +26,6 @@ type Props = {
 
 export function ProfileInfoForm({ email, initialDisplayName }: Props) {
   const router = useRouter();
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const form = useForm<ProfileInfoFormValues>({
     resolver: zodResolver(profileInfoSchema),
@@ -36,15 +35,12 @@ export function ProfileInfoForm({ email, initialDisplayName }: Props) {
   });
 
   async function onSubmit(values: ProfileInfoFormValues) {
-    setServerError(null);
-    setSuccessMessage(null);
-
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setServerError("Session expired. Please sign in again.");
+      toast.error("Session expired. Please sign in again.");
       return;
     }
 
@@ -54,11 +50,11 @@ export function ProfileInfoForm({ email, initialDisplayName }: Props) {
       .eq("id", user.id);
 
     if (error) {
-      setServerError(error.message);
+      toast.error(error.message);
       return;
     }
 
-    setSuccessMessage("Profile saved");
+    toast.success("Profile saved");
     form.reset(values);
     router.refresh();
   }
@@ -68,20 +64,6 @@ export function ProfileInfoForm({ email, initialDisplayName }: Props) {
   return (
     <section className="rounded-card border border-border bg-cream p-6">
       <h2 className="text-lg font-semibold text-charcoal mb-4">Profile</h2>
-
-      {successMessage && (
-        <output className="block mb-4 rounded-standard border border-green-300/30 bg-green-50/50 px-3 py-2.5 text-sm text-green-700">
-          {successMessage}
-        </output>
-      )}
-      {serverError && (
-        <div
-          role="alert"
-          className="mb-4 rounded-standard border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-        >
-          {serverError}
-        </div>
-      )}
 
       <div className="mb-4">
         <p className="text-sm font-medium text-charcoal mb-1">Email</p>

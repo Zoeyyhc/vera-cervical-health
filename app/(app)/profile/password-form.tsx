@@ -15,33 +15,27 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { createClient } from "@/lib/supabase/browser";
 import { type PasswordFormValues, passwordSchema } from "@/lib/validations/profile";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 export function PasswordForm() {
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
   const form = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordSchema),
     defaultValues: { password: "", confirmPassword: "" },
   });
 
   async function onSubmit(values: PasswordFormValues) {
-    setServerError(null);
-    setSuccessMessage(null);
-
     const supabase = createClient();
     const { error } = await supabase.auth.updateUser({
       password: values.password,
     });
 
     if (error) {
-      setServerError(error.message);
+      toast.error(error.message);
       return;
     }
 
-    setSuccessMessage("Password updated");
+    toast.success("Password updated");
     form.reset();
   }
 
@@ -50,20 +44,6 @@ export function PasswordForm() {
   return (
     <section className="rounded-card border border-border bg-cream p-6">
       <h2 className="text-lg font-semibold text-charcoal mb-4">Change password</h2>
-
-      {successMessage && (
-        <output className="block mb-4 rounded-standard border border-green-300/30 bg-green-50/50 px-3 py-2.5 text-sm text-green-700">
-          {successMessage}
-        </output>
-      )}
-      {serverError && (
-        <div
-          role="alert"
-          className="mb-4 rounded-standard border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-        >
-          {serverError}
-        </div>
-      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
