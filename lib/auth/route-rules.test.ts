@@ -76,6 +76,16 @@ describe("decideRedirect", () => {
     ).toEqual({ type: "redirect", to: "/chat" });
   });
 
+  it("allows authenticated users on /reset-password (recovery flow needs active session)", () => {
+    expect(
+      decideRedirect({
+        pathname: "/reset-password",
+        isAuthenticated: true,
+        isAdmin: false,
+      })
+    ).toEqual({ type: "allow" });
+  });
+
   it("redirects non-admin authenticated users from /admin to /chat", () => {
     expect(
       decideRedirect({

@@ -225,6 +225,19 @@ Every judgment must be preceded by at least one screenshot. Never judge a criter
 
 ---
 
+## Workflow
+
+This is a solo project. The following superpowers skills are **disabled** here — do not invoke them:
+
+- `superpowers:requesting-code-review` / `superpowers:receiving-code-review` — no human reviewer on this project. For self-review, use the `simplify` skill instead.
+- `superpowers:using-git-worktrees` — local Supabase runs a single DB instance and `pnpm dev` binds one port; parallel worktrees cause collisions, not speed.
+- `superpowers:dispatching-parallel-agents` — agents, types, and migrations in this repo share files, so parallel execution creates merge overhead instead of savings. `Explore` and `Plan` subagents (read-only research) are still fine.
+- `superpowers:executing-plans` strict checkpoint flow — the solo developer is the decision-maker; execute plans directly without per-step approval gates. Still read the plan file and follow it; just skip the checkpoint pauses.
+
+Still actively used: `brainstorming`, `writing-plans`, `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `simplify`.
+
+---
+
 ## Environment Setup
 
 1. Copy `.env.example` to `.env.local` — never commit `.env.local`

@@ -33,7 +33,10 @@ export function decideRedirect(params: {
     return { type: "redirect", to: "/login" };
   }
 
-  if (isAuthenticated && isAuthPage(pathname)) {
+  // /reset-password is exempt: the recovery flow lands here WITH an active
+  // session (callback just exchanged the code), and the page needs that
+  // session to call updateUser. Bouncing to /chat would break the flow.
+  if (isAuthenticated && isAuthPage(pathname) && !matchesAny(pathname, ["/reset-password"])) {
     return { type: "redirect", to: "/chat" };
   }
 
