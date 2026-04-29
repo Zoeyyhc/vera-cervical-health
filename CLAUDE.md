@@ -176,7 +176,7 @@ This applies to: Google Maps, NewsAPI, SerpAPI.
 
 ### Database
 - All migrations in `supabase/migrations/` with sequential numbering
-- Never edit a migration after it has been applied to any environment — create a new one
+- Migrations may be edited freely during local development — re-run `supabase db reset` to re-apply
 - Use `supabase.rpc()` for pgvector queries
 - RLS is always on — test policies after creating new tables
 
@@ -220,9 +220,21 @@ Every judgment must be preceded by at least one screenshot. Never judge a criter
 - **DO NOT** create a `clinics` table in the database for v1 — clinic data comes from Google Places API
 - **DO NOT** use ESLint or Prettier — Biome is the sole linter/formatter
 - **DO NOT** add fonts other than Camera Plain Variable (with `ui-sans-serif, system-ui` fallback) — no Google Fonts
-- **DO NOT** amend migrations that have already been applied — create a new migration instead
 - **DO NOT** use font weight 700 (bold) — maximum weight in the design system is 600
 - **DO NOT** add MCP server infrastructure in v1 — agent tools are inlined into Next.js API routes
+
+---
+
+## Workflow
+
+This is a solo project. The following superpowers skills are **disabled** here — do not invoke them:
+
+- `superpowers:requesting-code-review` / `superpowers:receiving-code-review` — no human reviewer on this project. For self-review, use the `simplify` skill instead.
+- `superpowers:using-git-worktrees` — local Supabase runs a single DB instance and `pnpm dev` binds one port; parallel worktrees cause collisions, not speed.
+- `superpowers:dispatching-parallel-agents` — agents, types, and migrations in this repo share files, so parallel execution creates merge overhead instead of savings. `Explore` and `Plan` subagents (read-only research) are still fine.
+- `superpowers:executing-plans` strict checkpoint flow — the solo developer is the decision-maker; execute plans directly without per-step approval gates. Still read the plan file and follow it; just skip the checkpoint pauses.
+
+Still actively used: `brainstorming`, `writing-plans`, `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `simplify`.
 
 ---
 

@@ -44,25 +44,3 @@ as $$
   order by embedding <=> query_embedding
   limit match_count;
 $$;
-
--- RLS: knowledge_chunks
-alter table public.knowledge_chunks enable row level security;
-
--- Public health content - all roles (anon and authenticated) can read.
--- The server-side RAG agent uses the anon key, so anon must be permitted.
-create policy "knowledge_chunks: anyone can read"
-  on public.knowledge_chunks for select
-  using (true);
-
--- Only admins can ingest (insert), update, or delete chunks
-create policy "knowledge_chunks: admins can insert"
-  on public.knowledge_chunks for insert
-  with check (public.is_admin());
-
-create policy "knowledge_chunks: admins can update"
-  on public.knowledge_chunks for update
-  using (public.is_admin());
-
-create policy "knowledge_chunks: admins can delete"
-  on public.knowledge_chunks for delete
-  using (public.is_admin());

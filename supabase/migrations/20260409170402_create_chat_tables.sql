@@ -34,31 +34,3 @@ create table public.chat_messages (
 );
 
 create index on public.chat_messages (session_id);
-
--- RLS: chat_sessions
-alter table public.chat_sessions enable row level security;
-
-create policy "chat_sessions: owner or admin"
-  on public.chat_sessions for all
-  using (auth.uid() = user_id or public.is_admin())
-  with check (auth.uid() = user_id or public.is_admin());
-
--- RLS: chat_messages (access via session ownership)
-alter table public.chat_messages enable row level security;
-
-create policy "chat_messages: owner or admin"
-  on public.chat_messages for all
-  using (
-    exists (
-      select 1 from public.chat_sessions s
-      where s.id = chat_messages.session_id
-        and (s.user_id = auth.uid() or public.is_admin())
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.chat_sessions s
-      where s.id = chat_messages.session_id
-        and (s.user_id = auth.uid() or public.is_admin())
-    )
-  );

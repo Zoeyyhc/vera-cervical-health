@@ -29,7 +29,8 @@ const config: Config = {
         ring: "var(--ring)",
       },
       fontFamily: {
-        sans: ["var(--font-camera)", "ui-sans-serif", "system-ui"],
+        // var(--font-camera) re-enabled once the licensed CameraPlainVariable font is added
+        sans: ["ui-sans-serif", "system-ui"],
       },
       fontWeight: {
         // Override to ensure 700 is never reachable via Tailwind utilities
