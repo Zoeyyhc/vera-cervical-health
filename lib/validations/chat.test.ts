@@ -36,4 +36,25 @@ describe("chatRequestSchema", () => {
     const result = chatRequestSchema.safeParse(null);
     expect(result.success).toBe(false);
   });
+
+  it("accepts a valid UUID sessionId", () => {
+    const result = chatRequestSchema.safeParse({
+      message: "Hi",
+      sessionId: "c3aab8b6-3a89-4dc1-9bbb-dca08fee48f4",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a body without sessionId (optional)", () => {
+    const result = chatRequestSchema.safeParse({ message: "Hi" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a non-UUID sessionId", () => {
+    const result = chatRequestSchema.safeParse({
+      message: "Hi",
+      sessionId: "not-a-uuid",
+    });
+    expect(result.success).toBe(false);
+  });
 });
