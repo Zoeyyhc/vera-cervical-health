@@ -6,11 +6,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
-// Skip the entire suite when the local Supabase service role key is not
-// available — lets the test be part of the default `pnpm test` run without
-// breaking CI environments that don't have Supabase up.
-describe.runIf(Boolean(SERVICE_ROLE))("profiles migration (#11)", () => {
+// Skip the entire suite unless BOTH the service-role and anon keys are present
+// — matches `tests/db/rls-policies.test.ts`. Gating on service role alone is
+// unsafe because vitest.setup.ts stubs that var so `@/lib/env` can load in
+// tests; the anon key is the genuine signal that a local Supabase is up.
+describe.runIf(Boolean(SERVICE_ROLE) && Boolean(ANON_KEY))("profiles migration (#11)", () => {
   let supabase: SupabaseClient;
   const createdUserIds: string[] = [];
 
