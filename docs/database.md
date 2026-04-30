@@ -39,6 +39,8 @@ metadata    jsonb          -- agent trace, sources used, tool calls
 created_at  timestamptz default now()
 ```
 
+**Indexes:** `(session_id)` for owner/session-scoped filtering; `(session_id, created_at)` for ordered-history reads (used by the chat context-window helper in EPIC3-05).
+
 ### `knowledge_chunks`
 
 ```sql
