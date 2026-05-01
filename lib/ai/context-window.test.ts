@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { type ChatHistoryMessage, trimToBudget } from "./context-window";
+import { describe, expect, it, vi } from "vitest";
+import { type ChatHistoryMessage, loadRecentMessages, trimToBudget } from "./context-window";
 
 const u = (content: string): ChatHistoryMessage => ({ role: "user", content });
 const a = (content: string): ChatHistoryMessage => ({ role: "assistant", content });
@@ -67,5 +67,64 @@ describe("trimToBudget", () => {
     ];
     // budget 10 → only the newest (10 chars) fits.
     expect(trimToBudget(msgs, 10)).toEqual([msgs[2]]);
+  });
+});
+
+function mockSupabaseSelect(
+  rows: Array<{ role: string; content: string }> | null,
+  error: Error | null = null
+) {
+  const order = vi.fn().mockResolvedValue({ data: rows, error });
+  const eq = vi.fn().mockReturnValue({ order });
+  const select = vi.fn().mockReturnValue({ eq });
+  const from = vi.fn().mockReturnValue({ select });
+  const supabase = { from } as unknown as Parameters<typeof loadRecentMessages>[0];
+  return { supabase, from, select, eq, order };
+}
+
+describe("loadRecentMessages", () => {
+  it("queries chat_messages by session_id ordered by created_at ASC", async () => {
+    const { supabase, from, select, eq, order } = mockSupabaseSelect([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hello" },
+    ]);
+
+    const result = await loadRecentMessages(supabase, "session-x", 1000);
+
+    expect(from).toHaveBeenCalledWith("chat_messages");
+    expect(select).toHaveBeenCalledWith("role, content");
+    expect(eq).toHaveBeenCalledWith("session_id", "session-x");
+    expect(order).toHaveBeenCalledWith("created_at", { ascending: true });
+    expect(result).toEqual([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hello" },
+    ]);
+  });
+
+  it("returns an empty array when the session has no messages", async () => {
+    const { supabase } = mockSupabaseSelect([]);
+    const result = await loadRecentMessages(supabase, "session-empty", 1000);
+    expect(result).toEqual([]);
+  });
+
+  it("trims to the budget when the history is too large", async () => {
+    const { supabase } = mockSupabaseSelect([
+      { role: "user", content: "aaaaaaaaaa" }, // 10
+      { role: "assistant", content: "bbbbbbbbbb" }, // 10
+      { role: "user", content: "cccccccccc" }, // 10
+    ]);
+    const result = await loadRecentMessages(supabase, "s", 10);
+    expect(result).toEqual([{ role: "user", content: "cccccccccc" }]);
+  });
+
+  it("uses BUDGET_CHARS by default when no budget is passed", async () => {
+    const { supabase } = mockSupabaseSelect([{ role: "user", content: "hi" }]);
+    const result = await loadRecentMessages(supabase, "s");
+    expect(result).toEqual([{ role: "user", content: "hi" }]);
+  });
+
+  it("throws if the underlying query errors", async () => {
+    const { supabase } = mockSupabaseSelect(null, new Error("db down"));
+    await expect(loadRecentMessages(supabase, "s", 1000)).rejects.toThrow("db down");
   });
 });
