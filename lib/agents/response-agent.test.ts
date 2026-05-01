@@ -45,8 +45,10 @@ function mockAnthropic(stream: StreamLike) {
   };
 }
 
-async function collect(iter: AsyncIterable<string>): Promise<string[]> {
-  const chunks: string[] = [];
+import type { AgentChunk } from "./response-agent";
+
+async function collect(iter: AsyncIterable<AgentChunk>): Promise<AgentChunk[]> {
+  const chunks: AgentChunk[] = [];
   for await (const c of iter) chunks.push(c);
   return chunks;
 }
@@ -67,7 +69,11 @@ describe("runResponseAgent", () => {
     vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
 
     const chunks = await collect(runResponseAgent({ userMessage: "Hi", history: [] }));
-    expect(chunks).toEqual(["Hello", ", ", "world!"]);
+    expect(chunks).toEqual([
+      { type: "text", text: "Hello" },
+      { type: "text", text: ", " },
+      { type: "text", text: "world!" },
+    ]);
   });
 
   test("ignores non-text events from the SDK", async () => {
@@ -81,7 +87,7 @@ describe("runResponseAgent", () => {
     vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
 
     const chunks = await collect(runResponseAgent({ userMessage: "Hi", history: [] }));
-    expect(chunks).toEqual(["only this"]);
+    expect(chunks).toEqual([{ type: "text", text: "only this" }]);
   });
 
   test("returns no chunks when the stream is empty", async () => {
@@ -178,5 +184,46 @@ describe("runResponseAgent", () => {
     await expect(collect(runResponseAgent({ userMessage: "Hi", history: [] }))).rejects.toThrow(
       "boom"
     );
+  });
+
+  test("emits a sources chunk after text when ctx.ragSources is non-empty", async () => {
+    const anthropic = mockAnthropic({
+      events: [{ type: "content_block_delta", delta: { type: "text_delta", text: "Hi" } }],
+    });
+    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
+
+    const chunks = await collect(
+      runResponseAgent({
+        userMessage: "What is HPV?",
+        history: [],
+        ragSources: [
+          { id: "1", title: "Cancer Council", url: "https://example.com", chunkId: "c1" },
+        ],
+      })
+    );
+    expect(chunks).toEqual([
+      { type: "text", text: "Hi" },
+      {
+        type: "sources",
+        sources: [{ id: "1", title: "Cancer Council", url: "https://example.com", chunkId: "c1" }],
+      },
+    ]);
+  });
+
+  test("does not emit a sources chunk when ctx.ragSources is empty or absent", async () => {
+    const anthropic = mockAnthropic({
+      events: [{ type: "content_block_delta", delta: { type: "text_delta", text: "Hi" } }],
+    });
+    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
+
+    // ragSources omitted entirely
+    const chunksNoField = await collect(runResponseAgent({ userMessage: "Hi", history: [] }));
+    expect(chunksNoField).toEqual([{ type: "text", text: "Hi" }]);
+
+    // ragSources present but empty
+    const chunksEmpty = await collect(
+      runResponseAgent({ userMessage: "Hi", history: [], ragSources: [] })
+    );
+    expect(chunksEmpty).toEqual([{ type: "text", text: "Hi" }]);
   });
 });
