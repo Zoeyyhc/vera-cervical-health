@@ -1,3 +1,4 @@
+Connecting to db 5432
 export type Json =
   | string
   | number
@@ -74,6 +75,7 @@ export type Database = {
           metadata: Json | null
           role: string
           session_id: string
+          sources: Json | null
         }
         Insert: {
           content: string
@@ -82,6 +84,7 @@ export type Database = {
           metadata?: Json | null
           role: string
           session_id: string
+          sources?: Json | null
         }
         Update: {
           content?: string
@@ -90,6 +93,7 @@ export type Database = {
           metadata?: Json | null
           role?: string
           session_id?: string
+          sources?: Json | null
         }
         Relationships: [
           {
@@ -352,3 +356,5 @@ export const Constants = {
   },
 } as const
 
+A new version of Supabase CLI is available: v2.95.4 (currently installed v2.84.2)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
