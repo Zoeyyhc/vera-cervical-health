@@ -16,6 +16,7 @@ vi.mock("@/lib/ai/anthropic", async (importOriginal) => {
 
 import { POST } from "@/app/api/chat/route";
 import { getAnthropicClient } from "@/lib/ai/anthropic";
+import { parseChatStream } from "@/lib/ai/streaming";
 import { createClient } from "@/lib/supabase/server";
 
 type MockedAnthropic = {
@@ -139,22 +140,9 @@ function postRequest(body: unknown): Request {
 }
 
 async function readNdjsonStream(response: Response): Promise<unknown[]> {
+  if (!response.body) throw new Error("response has no body stream");
   const events: unknown[] = [];
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("response has no body stream");
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      if (line.trim()) events.push(JSON.parse(line));
-    }
-  }
-  if (buffer.trim()) events.push(JSON.parse(buffer));
+  for await (const ev of parseChatStream(response.body)) events.push(ev);
   return events;
 }
 
