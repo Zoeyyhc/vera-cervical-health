@@ -10,6 +10,7 @@ process.env.NEWS_API_KEY ||= "test-news-api-key";
 process.env.SERPAPI_KEY ||= "test-serpapi-key";
 
 import "@testing-library/jest-dom/vitest";
+import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll } from "vitest";
 import { server } from "./test-utils/server";
 
@@ -19,6 +20,8 @@ beforeAll(() => {
 
 afterEach(() => {
   server.resetHandlers();
+  // Tear down any RTL-rendered DOM so tests don't leak into each other.
+  cleanup();
 });
 
 afterAll(() => {

@@ -1,6 +1,7 @@
 import { CLAUDE_MODEL, getAnthropicClient } from "@/lib/ai/anthropic";
 import type { ChatHistoryMessage } from "@/lib/ai/context-window";
 import { DEFAULT_SYSTEM_PROMPT } from "@/lib/ai/system-prompt";
+import type { Source } from "@/types/agents";
 
 const MAX_TOKENS = 4096;
 
@@ -11,19 +12,26 @@ export type ResponseAgentContext = {
   history: ChatHistoryMessage[];
   /** Optional retrieved-context block. When present, appended to the system prompt. */
   ragContext?: string;
+  /**
+   * Optional structured citations from the RAG agent. When non-empty, the
+   * agent yields one `sources` chunk after all text chunks. Wired by #27.
+   */
+  ragSources?: Source[];
   /** Optional system-prompt override. Defaults to `DEFAULT_SYSTEM_PROMPT`. */
   systemPrompt?: string;
 };
 
+export type AgentChunk = { type: "text"; text: string } | { type: "sources"; sources: Source[] };
+
 /**
  * Pure response-agent function. Yields each text delta from Claude as it
- * arrives, in order. The caller handles HTTP framing, persistence, and any
- * downstream wire-format concerns.
+ * arrives, then optionally a single `sources` chunk at the end if
+ * `ctx.ragSources` is non-empty.
  *
  * Per CLAUDE.md: agents are pure functions with no DB / HTTP awareness, and
  * the model string is hard-coded (never from env).
  */
-export async function* runResponseAgent(ctx: ResponseAgentContext): AsyncIterable<string> {
+export async function* runResponseAgent(ctx: ResponseAgentContext): AsyncIterable<AgentChunk> {
   const baseSystem = ctx.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
   const system = ctx.ragContext
     ? `${baseSystem}\n\nRetrieved context:\n${ctx.ragContext}`
@@ -41,7 +49,11 @@ export async function* runResponseAgent(ctx: ResponseAgentContext): AsyncIterabl
 
   for await (const event of stream) {
     if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-      yield event.delta.text;
+      yield { type: "text", text: event.delta.text };
     }
+  }
+
+  if (ctx.ragSources && ctx.ragSources.length > 0) {
+    yield { type: "sources", sources: ctx.ragSources };
   }
 }

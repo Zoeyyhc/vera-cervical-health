@@ -92,13 +92,19 @@ export async function POST(request: Request) {
       send({ type: "start", sessionId: sessionIdResolved });
 
       let assistantText = "";
+      let collectedSources: import("@/types/agents").Source[] | null = null;
       try {
-        for await (const text of runResponseAgent({
+        for await (const chunk of runResponseAgent({
           userMessage,
           history,
         })) {
-          assistantText += text;
-          send({ type: "text", text });
+          if (chunk.type === "text") {
+            assistantText += chunk.text;
+            send({ type: "text", text: chunk.text });
+          } else if (chunk.type === "sources") {
+            collectedSources = chunk.sources;
+            send({ type: "sources", sources: chunk.sources });
+          }
         }
 
         // Persist the completed assistant message before signalling done.
@@ -106,6 +112,8 @@ export async function POST(request: Request) {
           session_id: sessionIdResolved,
           role: "assistant",
           content: assistantText,
+          // biome-ignore lint/suspicious/noExplicitAny: jsonb column type erases shape; cast is intentional
+          sources: collectedSources as any,
         });
         if (insertErr) {
           // Same policy as the non-streaming version: log but still emit done,

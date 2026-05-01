@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { Source } from "@/types/agents";
 import { notFound } from "next/navigation";
 import { ChatClient } from "../chat-client";
 
@@ -19,7 +20,7 @@ export default async function ChatSessionPage({ params }: Props) {
 
   const { data: messages, error: msgErr } = await supabase
     .from("chat_messages")
-    .select("id, role, content")
+    .select("id, role, content, sources")
     .eq("session_id", sessionId)
     .order("created_at", { ascending: true });
 
@@ -31,6 +32,7 @@ export default async function ChatSessionPage({ params }: Props) {
       role: m.role as "user" | "assistant",
       content: m.content,
       status: "complete" as const,
+      sources: (m.sources as Source[] | null) ?? undefined,
     })) ?? [];
 
   return <ChatClient initialSessionId={sessionId} initialMessages={initialMessages} />;

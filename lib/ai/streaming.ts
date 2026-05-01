@@ -1,15 +1,21 @@
+import type { Source } from "@/types/agents";
+
 /**
  * Wire format for the streaming `/api/chat` response. NDJSON over
  * `application/x-ndjson` — one JSON-encoded `ChatStreamEvent` per line.
  *
- * Sequence on the happy path: `start` → 1+ `text` → `done`.
+ * Sequence on the happy path: `start` → 1+ `text` → (`sources`)? → `done`.
  * On mid-stream error: `start` → 0+ `text` → `error`. The terminal event
  * is sent AFTER the assistant message has been persisted, so consumers
  * can treat `done`/`error` as the durability signal.
+ *
+ * `sources` is emitted at most once, after all text chunks, when the
+ * response agent received `ragSources` in its context. Plumbed by #27.
  */
 export type ChatStreamEvent =
   | { type: "start"; sessionId: string }
   | { type: "text"; text: string }
+  | { type: "sources"; sources: Source[] }
   | { type: "done" }
   | { type: "error"; message: string };
 

@@ -74,6 +74,7 @@ export type Database = {
           metadata: Json | null
           role: string
           session_id: string
+          sources: Json | null
         }
         Insert: {
           content: string
@@ -82,6 +83,7 @@ export type Database = {
           metadata?: Json | null
           role: string
           session_id: string
+          sources?: Json | null
         }
         Update: {
           content?: string
@@ -90,6 +92,7 @@ export type Database = {
           metadata?: Json | null
           role?: string
           session_id?: string
+          sources?: Json | null
         }
         Relationships: [
           {
@@ -351,4 +354,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

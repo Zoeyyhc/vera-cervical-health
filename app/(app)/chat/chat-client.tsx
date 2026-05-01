@@ -2,16 +2,19 @@
 
 import { Button } from "@/components/ui/button";
 import { parseChatStream } from "@/lib/ai/streaming";
+import type { Source } from "@/types/agents";
 import { Loader2Icon, SendIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { CitationChips } from "./citation-chips";
 
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   status: "complete" | "streaming" | "error";
+  sources?: Source[];
 };
 
 type Props = {
@@ -87,6 +90,10 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
         } else if (event.type === "text") {
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + event.text } : m))
+          );
+        } else if (event.type === "sources") {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, sources: event.sources } : m))
           );
         } else if (event.type === "done") {
           setMessages((prev) =>
@@ -181,10 +188,13 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[85%] whitespace-pre-wrap rounded-lg px-4 py-2.5 text-sm leading-relaxed ${bubbleClass}`}
-      >
-        {message.content || (isStreaming ? <TypingDots /> : null)}
+      <div className="max-w-[85%]">
+        <div
+          className={`whitespace-pre-wrap rounded-lg px-4 py-2.5 text-sm leading-relaxed ${bubbleClass}`}
+        >
+          {message.content || (isStreaming ? <TypingDots /> : null)}
+        </div>
+        {message.role === "assistant" && <CitationChips sources={message.sources} />}
       </div>
     </div>
   );
