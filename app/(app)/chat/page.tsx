@@ -1,13 +1,14 @@
+import { ChatClient } from "./chat-client";
 import { SignOutButton } from "./sign-out-button";
 
 export default function ChatPage() {
   return (
-    <main className="min-h-screen bg-cream p-8">
-      <h1 className="text-2xl font-semibold text-charcoal">Chat</h1>
-      <p className="mt-2 text-muted-gray">Coming soon.</p>
-      <div className="mt-8">
+    <main className="bg-cream flex min-h-screen flex-col">
+      <header className="border-border flex items-center justify-between border-b px-6 py-3">
+        <h1 className="text-charcoal text-base font-medium">Chat</h1>
         <SignOutButton />
-      </div>
+      </header>
+      <ChatClient />
     </main>
   );
 }
