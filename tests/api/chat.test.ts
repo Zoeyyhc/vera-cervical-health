@@ -27,12 +27,15 @@ type SupabaseFromMock = {
   sessionInsert: ReturnType<typeof vi.fn>;
   sessionSingle: ReturnType<typeof vi.fn>;
   messageInsert: ReturnType<typeof vi.fn>;
+  historyOrder: ReturnType<typeof vi.fn>;
 };
 
 type SupabaseChainOpts = {
   newSessionId?: string;
   sessionInsertError?: Error | null;
   messageInsertError?: Error | null;
+  historyRows?: Array<{ role: string; content: string }>;
+  historyError?: Error | null;
 };
 
 function mockSupabaseChain(opts: SupabaseChainOpts = {}): SupabaseFromMock {
@@ -53,13 +56,20 @@ function mockSupabaseChain(opts: SupabaseChainOpts = {}): SupabaseFromMock {
     error: opts.messageInsertError ?? null,
   });
 
+  const historyOrder = vi.fn().mockResolvedValue({
+    data: opts.historyRows ?? [],
+    error: opts.historyError ?? null,
+  });
+  const historyEq = vi.fn().mockReturnValue({ order: historyOrder });
+  const messageSelect = vi.fn().mockReturnValue({ eq: historyEq });
+
   const from = vi.fn((table: string) => {
     if (table === "chat_sessions") return { insert: sessionInsert };
-    if (table === "chat_messages") return { insert: messageInsert };
+    if (table === "chat_messages") return { insert: messageInsert, select: messageSelect };
     throw new Error(`Unmocked table: ${table}`);
   });
 
-  return { from, sessionInsert, sessionSingle, messageInsert };
+  return { from, sessionInsert, sessionSingle, messageInsert, historyOrder };
 }
 
 function mockSupabase(
@@ -125,7 +135,10 @@ describe("POST /api/chat", () => {
   });
 
   test("creates a new session, writes user+assistant messages, returns { sessionId, reply }", async () => {
-    const fromChain = mockSupabaseChain({ newSessionId: "22222222-2222-4222-8222-222222222222" });
+    const fromChain = mockSupabaseChain({
+      newSessionId: "22222222-2222-4222-8222-222222222222",
+      historyRows: [{ role: "user", content: "Hi" }],
+    });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
 
     const anthropic = mockAnthropic("Hello there!");
@@ -151,6 +164,7 @@ describe("POST /api/chat", () => {
     const [callArgs] = anthropic.messages.create.mock.calls;
     expect(callArgs[0].model).toBe("claude-sonnet-4-6");
     expect(callArgs[0].system).toMatch(/cervical health/i);
+    // Messages array now comes from loadRecentMessages, not a hand-built [user]
     expect(callArgs[0].messages).toEqual([{ role: "user", content: "Hi" }]);
     expect(fromChain.messageInsert).toHaveBeenNthCalledWith(2, {
       session_id: "22222222-2222-4222-8222-222222222222",
@@ -164,8 +178,37 @@ describe("POST /api/chat", () => {
     expect(userInsertOrder).toBeLessThan(claudeCallOrder);
   });
 
+  test("sends prior session history to Claude on a follow-up turn", async () => {
+    const fromChain = mockSupabaseChain({
+      historyRows: [
+        { role: "user", content: "What is HPV?" },
+        { role: "assistant", content: "HPV stands for human papillomavirus..." },
+        { role: "user", content: "How is it transmitted?" },
+      ],
+    });
+    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    const anthropic = mockAnthropic("It's transmitted via skin-to-skin contact...");
+    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
+
+    await POST(
+      postRequest({
+        message: "How is it transmitted?",
+        sessionId: "c3aab8b6-3a89-4dc1-9bbb-dca08fee48f4",
+      })
+    );
+
+    const [callArgs] = anthropic.messages.create.mock.calls;
+    expect(callArgs[0].messages).toEqual([
+      { role: "user", content: "What is HPV?" },
+      { role: "assistant", content: "HPV stands for human papillomavirus..." },
+      { role: "user", content: "How is it transmitted?" },
+    ]);
+  });
+
   test("with a provided sessionId, reuses it (no new session insert)", async () => {
-    const fromChain = mockSupabaseChain();
+    const fromChain = mockSupabaseChain({
+      historyRows: [{ role: "user", content: "Hi" }],
+    });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropic("ok") as never);
 
@@ -214,9 +257,25 @@ describe("POST /api/chat", () => {
     errSpy.mockRestore();
   });
 
+  test("returns 500 when loading session history fails", async () => {
+    const fromChain = mockSupabaseChain({
+      historyError: new Error("history query exploded"),
+    });
+    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const res = await POST(postRequest({ message: "Hi" }));
+
+    expect(res.status).toBe(500);
+    expect(getAnthropicClient).not.toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
   test("logs but does not fail the request if the assistant-message insert errors", async () => {
     // First insert (user) succeeds, second insert (assistant) errors.
-    const fromChain = mockSupabaseChain();
+    const fromChain = mockSupabaseChain({
+      historyRows: [{ role: "user", content: "Hi" }],
+    });
     fromChain.messageInsert
       .mockResolvedValueOnce({ data: null, error: null })
       .mockResolvedValueOnce({ data: null, error: new Error("write race") });
@@ -236,7 +295,9 @@ describe("POST /api/chat", () => {
   });
 
   test("returns 500 when the Anthropic call rejects, without leaking the error", async () => {
-    const fromChain = mockSupabaseChain();
+    const fromChain = mockSupabaseChain({
+      historyRows: [{ role: "user", content: "Hi" }],
+    });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
     const anthropic: MockedAnthropic = {
       messages: {
