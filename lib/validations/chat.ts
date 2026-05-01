@@ -8,6 +8,7 @@ export const chatRequestSchema = z.object({
     .string()
     .min(1, "message must not be empty")
     .max(4000, "message must be 4000 characters or fewer"),
+  sessionId: z.string().uuid("sessionId must be a UUID").optional(),
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
