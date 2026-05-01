@@ -181,7 +181,7 @@ describe("POST /api/chat", () => {
   test("creates a new session, streams text deltas, persists on done", async () => {
     const fromChain = mockSupabaseChain({
       newSessionId: "22222222-2222-4222-8222-222222222222",
-      historyRows: [{ role: "user", content: "Hi" }],
+      historyRows: [], // no prior turns — brand-new session; agent appends "Hi"
     });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
 
@@ -224,10 +224,10 @@ describe("POST /api/chat", () => {
 
   test("sends prior session history to Claude on a follow-up turn", async () => {
     const fromChain = mockSupabaseChain({
+      // historyRows is PRIOR turns only — the agent appends the current msg.
       historyRows: [
         { role: "user", content: "What is HPV?" },
         { role: "assistant", content: "HPV stands for human papillomavirus..." },
-        { role: "user", content: "How is it transmitted?" },
       ],
     });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
@@ -254,7 +254,7 @@ describe("POST /api/chat", () => {
 
   test("with a provided sessionId, reuses it (no new session insert)", async () => {
     const fromChain = mockSupabaseChain({
-      historyRows: [{ role: "user", content: "Hi" }],
+      historyRows: [], // brand-new turn in an existing session; no prior messages
     });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropic("ok") as never);
@@ -322,7 +322,7 @@ describe("POST /api/chat", () => {
 
   test("emits start → text → error and persists partial with marker on stream error", async () => {
     const fromChain = mockSupabaseChain({
-      historyRows: [{ role: "user", content: "Hi" }],
+      historyRows: [],
     });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
 
@@ -362,7 +362,7 @@ describe("POST /api/chat", () => {
   test("logs but still emits done if the assistant-message insert errors", async () => {
     // First insert (user) succeeds, second insert (assistant) errors.
     const fromChain = mockSupabaseChain({
-      historyRows: [{ role: "user", content: "Hi" }],
+      historyRows: [],
     });
     fromChain.messageInsert
       .mockResolvedValueOnce({ data: null, error: null })
