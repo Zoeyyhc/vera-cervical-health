@@ -221,6 +221,7 @@ describe("POST /api/chat", () => {
       session_id: "22222222-2222-4222-8222-222222222222",
       role: "assistant",
       content: "Hello there!",
+      sources: null,
     });
 
     expect(anthropic.messages.stream).toHaveBeenCalledTimes(1);
