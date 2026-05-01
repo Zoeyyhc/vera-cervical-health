@@ -3,21 +3,28 @@
 import { Button } from "@/components/ui/button";
 import { parseChatStream } from "@/lib/ai/streaming";
 import { Loader2Icon, SendIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-type ChatMessage = {
+export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   status: "complete" | "streaming" | "error";
 };
 
-export function ChatClient() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+type Props = {
+  initialSessionId: string | null;
+  initialMessages: ChatMessage[];
+};
+
+export function ChatClient({ initialSessionId, initialMessages }: Props) {
+  const router = useRouter();
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(initialSessionId);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on every messages change (covers both the optimistic
@@ -70,6 +77,12 @@ export function ChatClient() {
 
       for await (const event of parseChatStream(response.body)) {
         if (event.type === "start") {
+          // First send when no session existed — swap the URL to /chat/<id>
+          // without unmounting the chat-client (router.replace would cross a
+          // route boundary and lose the in-flight stream).
+          if (sessionId === null) {
+            window.history.replaceState({}, "", `/chat/${event.sessionId}`);
+          }
           setSessionId(event.sessionId);
         } else if (event.type === "text") {
           setMessages((prev) =>
@@ -79,6 +92,9 @@ export function ChatClient() {
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, status: "complete" } : m))
           );
+          // Re-fetch the layout's session list so the sidebar reflects this
+          // new session (or the bumped updated_at on an existing one).
+          router.refresh();
         } else {
           // event.type === "error" — server-side stream error. The route
           // already persisted the partial with a marker; just notify the user.

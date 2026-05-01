@@ -54,10 +54,12 @@ export async function loadSessionsForUser(
   if (!data) return [];
 
   return data.map((row) => {
-    // Find the earliest user message in the nested join.
+    // Find the earliest user message in the nested join. The generated types
+    // treat created_at as nullable; in practice it's set by the column default,
+    // but coerce defensively so localeCompare doesn't get null.
     const userMessages = (row.chat_messages ?? [])
       .filter((m) => m.role === "user")
-      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+      .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
     const firstUserMessage = userMessages[0]?.content ?? null;
 
     return {
@@ -66,7 +68,7 @@ export async function loadSessionsForUser(
         title: row.title,
         firstUserMessage,
       }),
-      updatedAt: row.updated_at,
+      updatedAt: row.updated_at ?? "",
     };
   });
 }
