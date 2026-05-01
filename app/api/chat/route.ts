@@ -1,15 +1,8 @@
-import { CLAUDE_MODEL, getAnthropicClient } from "@/lib/ai/anthropic";
+import { runResponseAgent } from "@/lib/agents/response-agent";
 import { loadRecentMessages } from "@/lib/ai/context-window";
 import { type ChatStreamEvent, encodeChatStreamEvent } from "@/lib/ai/streaming";
-import { DEFAULT_SYSTEM_PROMPT } from "@/lib/ai/system-prompt";
 import { createClient } from "@/lib/supabase/server";
 import { chatRequestSchema } from "@/lib/validations/chat";
-
-// max_tokens choice: 4096 is comfortably long for educational replies.
-// Streaming removes the SDK HTTP-timeout concern that gated the old 16K
-// non-streaming bound, but 4096 still feels like the right ceiling for
-// a chat reply — easy to raise here if longer answers are needed.
-const MAX_TOKENS = 4096;
 
 export async function POST(request: Request) {
   // 1. Auth — bail before parsing the body
@@ -52,7 +45,19 @@ export async function POST(request: Request) {
     sessionId = created.id;
   }
 
-  // 4. Persist the user message BEFORE calling Claude — durability over speed.
+  // 4. Load the session's history (PRIOR turns; the response agent appends
+  //    the current user message itself).
+  let history: Awaited<ReturnType<typeof loadRecentMessages>>;
+  try {
+    history = await loadRecentMessages(supabase, sessionId);
+  } catch (err) {
+    console.error("[/api/chat] history load failed:", err instanceof Error ? err.message : err);
+    return Response.json({ error: "history_load_failed" }, { status: 500 });
+  }
+
+  // 5. Persist the user message BEFORE calling Claude — durability over speed.
+  //    The chat_sessions.updated_at trigger from #24 fires here so the
+  //    sidebar reflects activity even if Claude fails.
   const { error: userMsgErr } = await supabase.from("chat_messages").insert({
     session_id: sessionId,
     role: "user",
@@ -66,19 +71,11 @@ export async function POST(request: Request) {
     return Response.json({ error: "session_not_found" }, { status: 404 });
   }
 
-  // 5. Load the session's history (includes the just-inserted user msg)
-  let history: Awaited<ReturnType<typeof loadRecentMessages>>;
-  try {
-    history = await loadRecentMessages(supabase, sessionId);
-  } catch (err) {
-    console.error("[/api/chat] history load failed:", err instanceof Error ? err.message : err);
-    return Response.json({ error: "history_load_failed" }, { status: 500 });
-  }
-
-  // 6. Open Claude stream + return ReadableStream of NDJSON events.
-  // The pre-stream errors above use plain JSON responses; from here on,
-  // the response is a streaming body and errors surface as `error` events.
+  // 6. Open the response-agent stream + return ReadableStream of NDJSON
+  //    events. Pre-stream errors above use plain JSON; from here on, errors
+  //    surface as `error` events on the stream.
   const sessionIdResolved = sessionId;
+  const userMessage = parsed.data.message;
   const stream = new ReadableStream({
     async start(controller) {
       const send = (event: ChatStreamEvent) => {
@@ -89,20 +86,12 @@ export async function POST(request: Request) {
 
       let assistantText = "";
       try {
-        const anthropic = getAnthropicClient();
-        const claudeStream = anthropic.messages.stream({
-          model: CLAUDE_MODEL,
-          max_tokens: MAX_TOKENS,
-          system: DEFAULT_SYSTEM_PROMPT,
-          messages: history,
-        });
-
-        for await (const event of claudeStream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            const text = event.delta.text;
-            assistantText += text;
-            send({ type: "text", text });
-          }
+        for await (const text of runResponseAgent({
+          userMessage,
+          history,
+        })) {
+          assistantText += text;
+          send({ type: "text", text });
         }
 
         // Persist the completed assistant message before signalling done.
@@ -126,8 +115,6 @@ export async function POST(request: Request) {
         console.error("[/api/chat] stream error:", message);
 
         // Persist whatever we got, with a human-readable interruption marker.
-        // We persist even on zero text so the session reflects that a turn
-        // was attempted; the marker tells the UI/user what happened.
         const interrupted =
           assistantText.length > 0
             ? `${assistantText}\n\n[reply was interrupted: ${message}]`
