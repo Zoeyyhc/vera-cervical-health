@@ -41,6 +41,8 @@ created_at  timestamptz default now()
 
 **Indexes:** `(session_id)` for owner/session-scoped filtering; `(session_id, created_at)` for ordered-history reads (used by the chat context-window helper in EPIC3-05).
 
+**Triggers:** `chat_messages_bump_session_updated_at` (AFTER INSERT) → bumps the parent `chat_sessions.updated_at` to `now()`. Keeps the chat sidebar's `ORDER BY updated_at DESC` reflecting actual conversation activity. Added in `20260501053623_chat_sessions_bump_updated_at.sql` (#24); not `SECURITY DEFINER` because RLS already permits the session owner to UPDATE their own row.
+
 ### `knowledge_chunks`
 
 ```sql
