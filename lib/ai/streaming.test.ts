@@ -39,3 +39,73 @@ describe("encodeChatStreamEvent", () => {
     expect(text.match(/\n/g)?.length).toBe(1);
   });
 });
+
+import { parseChatStream } from "./streaming";
+
+function streamFromString(s: string): ReadableStream<Uint8Array> {
+  const enc = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(enc.encode(s));
+      controller.close();
+    },
+  });
+}
+
+function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
+  const enc = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      for (const c of chunks) controller.enqueue(enc.encode(c));
+      controller.close();
+    },
+  });
+}
+
+async function collect(stream: ReadableStream<Uint8Array>) {
+  const events: ChatStreamEvent[] = [];
+  for await (const ev of parseChatStream(stream)) events.push(ev);
+  return events;
+}
+
+describe("parseChatStream", () => {
+  it("yields a single event from a complete NDJSON line", async () => {
+    const events = await collect(streamFromString('{"type":"done"}\n'));
+    expect(events).toEqual([{ type: "done" }]);
+  });
+
+  it("yields multiple events from one chunk", async () => {
+    const events = await collect(
+      streamFromString(
+        '{"type":"start","sessionId":"s1"}\n{"type":"text","text":"hi"}\n{"type":"done"}\n'
+      )
+    );
+    expect(events).toEqual([
+      { type: "start", sessionId: "s1" },
+      { type: "text", text: "hi" },
+      { type: "done" },
+    ]);
+  });
+
+  it("reassembles a JSON object split across chunk boundaries", async () => {
+    const events = await collect(streamFromChunks(['{"type":"text",', '"text":"par', 'tial"}\n']));
+    expect(events).toEqual([{ type: "text", text: "partial" }]);
+  });
+
+  it("yields a final event that lacks a trailing newline", async () => {
+    // Some upstreams omit the trailing \n on the last line.
+    const events = await collect(streamFromString('{"type":"done"}'));
+    expect(events).toEqual([{ type: "done" }]);
+  });
+
+  it("skips blank lines", async () => {
+    const events = await collect(
+      streamFromString('{"type":"start","sessionId":"s1"}\n\n{"type":"done"}\n')
+    );
+    expect(events).toEqual([{ type: "start", sessionId: "s1" }, { type: "done" }]);
+  });
+
+  it("throws on malformed JSON so the UI can surface the error", async () => {
+    await expect(collect(streamFromString("not json\n"))).rejects.toThrow();
+  });
+});
