@@ -1,4 +1,5 @@
 import { CLAUDE_MODEL, getAnthropicClient } from "@/lib/ai/anthropic";
+import { loadRecentMessages } from "@/lib/ai/context-window";
 import { DEFAULT_SYSTEM_PROMPT } from "@/lib/ai/system-prompt";
 import { createClient } from "@/lib/supabase/server";
 import { chatRequestSchema } from "@/lib/validations/chat";
@@ -65,7 +66,18 @@ export async function POST(request: Request) {
     return Response.json({ error: "session_not_found" }, { status: 404 });
   }
 
-  // 5. Call Claude
+  // 5. Load the session's history so Claude has the full conversation context.
+  // The user message we just inserted is included in this read — that's how it
+  // ends up in the messages array sent to Claude (no manual append needed).
+  let history: Awaited<ReturnType<typeof loadRecentMessages>>;
+  try {
+    history = await loadRecentMessages(supabase, sessionId);
+  } catch (err) {
+    console.error("[/api/chat] history load failed:", err instanceof Error ? err.message : err);
+    return Response.json({ error: "history_load_failed" }, { status: 500 });
+  }
+
+  // 6. Call Claude
   let reply: string;
   try {
     const anthropic = getAnthropicClient();
@@ -73,7 +85,7 @@ export async function POST(request: Request) {
       model: CLAUDE_MODEL,
       max_tokens: MAX_TOKENS,
       system: DEFAULT_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: parsed.data.message }],
+      messages: history,
     });
     // The SDK's content union is { type: 'text', text, ... } | { type: 'thinking', ... }
     // | tool blocks. Discriminate inside `.map` so TS narrows correctly without a
@@ -86,7 +98,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "upstream_error" }, { status: 500 });
   }
 
-  // 6. Persist the assistant message. Failure here is logged but does NOT
+  // 7. Persist the assistant message. Failure here is logged but does NOT
   // fail the request — the user already paid for the Claude call and the
   // reply is real; losing the assistant message is recoverable on a future
   // round-trip via session re-fetch (and #22 will need to handle this for
