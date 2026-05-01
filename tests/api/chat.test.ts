@@ -93,11 +93,19 @@ type StreamEventLike = {
   delta: { type: "text_delta"; text: string };
 };
 
+// The /api/chat route now calls messages.create() once for the intent
+// classifier (#26) before messages.stream() for the response agent. Default
+// the classifier to general_chat so existing assertions about routing
+// behavior are unaffected.
+const DEFAULT_CLASSIFIER_REPLY = {
+  content: [{ type: "text", text: "general_chat" }],
+};
+
 /** Mocks the Anthropic SDK with a `messages.stream(...)` returning the given events as an async iterable. */
 function mockAnthropic(reply: string): MockedAnthropic {
   return {
     messages: {
-      create: vi.fn(),
+      create: vi.fn().mockResolvedValue(DEFAULT_CLASSIFIER_REPLY),
       stream: vi.fn(() => ({
         async *[Symbol.asyncIterator]() {
           yield {
@@ -117,7 +125,7 @@ function mockAnthropicStream(
 ): MockedAnthropic {
   return {
     messages: {
-      create: vi.fn(),
+      create: vi.fn().mockResolvedValue(DEFAULT_CLASSIFIER_REPLY),
       stream: vi.fn(() => ({
         async *[Symbol.asyncIterator]() {
           for (let i = 0; i < events.length; i++) {
@@ -278,12 +286,16 @@ describe("POST /api/chat", () => {
   test("returns 500 if creating the chat_sessions row fails", async () => {
     const fromChain = mockSupabaseChain({ sessionInsertError: new Error("db down") });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    // The classifier (#26) calls getAnthropicClient unconditionally; stock
+    // it so it succeeds, then assert the response agent's stream() never ran.
+    const anthropic = mockAnthropic("ignored");
+    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const res = await POST(postRequest({ message: "Hi" }));
 
     expect(res.status).toBe(500);
-    expect(getAnthropicClient).not.toHaveBeenCalled();
+    expect(anthropic.messages.stream).not.toHaveBeenCalled();
     expect(fromChain.messageInsert).not.toHaveBeenCalled();
     errSpy.mockRestore();
   });
@@ -291,6 +303,8 @@ describe("POST /api/chat", () => {
   test("returns 404 when the user-message insert fails (RLS denial / unowned session)", async () => {
     const fromChain = mockSupabaseChain({ messageInsertError: new Error("RLS violation") });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    const anthropic = mockAnthropic("ignored");
+    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const res = await POST(
@@ -301,7 +315,7 @@ describe("POST /api/chat", () => {
     );
 
     expect(res.status).toBe(404);
-    expect(getAnthropicClient).not.toHaveBeenCalled();
+    expect(anthropic.messages.stream).not.toHaveBeenCalled();
     expect(fromChain.messageInsert).toHaveBeenCalledTimes(1); // only the failed user write
     errSpy.mockRestore();
   });
@@ -311,12 +325,14 @@ describe("POST /api/chat", () => {
       historyError: new Error("history query exploded"),
     });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    const anthropic = mockAnthropic("ignored");
+    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const res = await POST(postRequest({ message: "Hi" }));
 
     expect(res.status).toBe(500);
-    expect(getAnthropicClient).not.toHaveBeenCalled();
+    expect(anthropic.messages.stream).not.toHaveBeenCalled();
     errSpy.mockRestore();
   });
 
