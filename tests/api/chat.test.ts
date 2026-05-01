@@ -19,7 +19,10 @@ import { getAnthropicClient } from "@/lib/ai/anthropic";
 import { createClient } from "@/lib/supabase/server";
 
 type MockedAnthropic = {
-  messages: { create: ReturnType<typeof vi.fn> };
+  messages: {
+    create: ReturnType<typeof vi.fn>; // legacy — no longer called by the route
+    stream: ReturnType<typeof vi.fn>;
+  };
 };
 
 type SupabaseFromMock = {
@@ -84,12 +87,45 @@ function mockSupabase(
   };
 }
 
+type StreamEventLike = {
+  type: "content_block_delta";
+  delta: { type: "text_delta"; text: string };
+};
+
+/** Mocks the Anthropic SDK with a `messages.stream(...)` returning the given events as an async iterable. */
 function mockAnthropic(reply: string): MockedAnthropic {
   return {
     messages: {
-      create: vi.fn().mockResolvedValue({
-        content: [{ type: "text", text: reply }],
-      }),
+      create: vi.fn(),
+      stream: vi.fn(() => ({
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: "content_block_delta",
+            delta: { type: "text_delta", text: reply },
+          } as StreamEventLike;
+        },
+      })),
+    },
+  };
+}
+
+/** Mocks `messages.stream(...)` so iteration yields each event in order, optionally throwing at index `throwAt`. */
+function mockAnthropicStream(
+  events: StreamEventLike[],
+  opts: { throwAt?: number } = {}
+): MockedAnthropic {
+  return {
+    messages: {
+      create: vi.fn(),
+      stream: vi.fn(() => ({
+        async *[Symbol.asyncIterator]() {
+          for (let i = 0; i < events.length; i++) {
+            if (opts.throwAt === i) throw new Error("upstream stream boom");
+            yield events[i];
+          }
+          if (opts.throwAt === events.length) throw new Error("upstream stream boom");
+        },
+      })),
     },
   };
 }
@@ -100,6 +136,26 @@ function postRequest(body: unknown): Request {
     headers: { "content-type": "application/json" },
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
+}
+
+async function readNdjsonStream(response: Response): Promise<unknown[]> {
+  const events: unknown[] = [];
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("response has no body stream");
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (line.trim()) events.push(JSON.parse(line));
+    }
+  }
+  if (buffer.trim()) events.push(JSON.parse(buffer));
+  return events;
 }
 
 describe("POST /api/chat", () => {
@@ -134,7 +190,7 @@ describe("POST /api/chat", () => {
     expect(getAnthropicClient).not.toHaveBeenCalled();
   });
 
-  test("creates a new session, writes user+assistant messages, returns { sessionId, reply }", async () => {
+  test("creates a new session, streams text deltas, persists on done", async () => {
     const fromChain = mockSupabaseChain({
       newSessionId: "22222222-2222-4222-8222-222222222222",
       historyRows: [{ role: "user", content: "Hi" }],
@@ -145,37 +201,37 @@ describe("POST /api/chat", () => {
     vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
 
     const res = await POST(postRequest({ message: "Hi" }));
-    const json = await res.json();
+    expect(res.headers.get("content-type")).toContain("application/x-ndjson");
 
-    expect(res.status).toBe(200);
-    expect(json).toEqual({
+    const events = await readNdjsonStream(res);
+    expect(events[0]).toEqual({
+      type: "start",
       sessionId: "22222222-2222-4222-8222-222222222222",
-      reply: "Hello there!",
     });
+    expect(events.find((e) => (e as { type: string }).type === "text")).toEqual({
+      type: "text",
+      text: "Hello there!",
+    });
+    expect(events.at(-1)).toEqual({ type: "done" });
 
-    // Order: session created → user msg written → Claude called → assistant msg written
+    // Order: session created → user msg written → Claude streamed → assistant msg persisted with full content
     expect(fromChain.sessionInsert).toHaveBeenCalledWith({ user_id: "u1", title: null });
     expect(fromChain.messageInsert).toHaveBeenNthCalledWith(1, {
       session_id: "22222222-2222-4222-8222-222222222222",
       role: "user",
       content: "Hi",
     });
-    expect(anthropic.messages.create).toHaveBeenCalledTimes(1);
-    const [callArgs] = anthropic.messages.create.mock.calls;
-    expect(callArgs[0].model).toBe("claude-sonnet-4-6");
-    expect(callArgs[0].system).toMatch(/cervical health/i);
-    // Messages array now comes from loadRecentMessages, not a hand-built [user]
-    expect(callArgs[0].messages).toEqual([{ role: "user", content: "Hi" }]);
     expect(fromChain.messageInsert).toHaveBeenNthCalledWith(2, {
       session_id: "22222222-2222-4222-8222-222222222222",
       role: "assistant",
       content: "Hello there!",
     });
 
-    // Strict ordering: user-msg insert came before the Claude call
-    const userInsertOrder = fromChain.messageInsert.mock.invocationCallOrder[0];
-    const claudeCallOrder = anthropic.messages.create.mock.invocationCallOrder[0];
-    expect(userInsertOrder).toBeLessThan(claudeCallOrder);
+    expect(anthropic.messages.stream).toHaveBeenCalledTimes(1);
+    const [streamArgs] = anthropic.messages.stream.mock.calls;
+    expect(streamArgs[0].model).toBe("claude-sonnet-4-6");
+    expect(streamArgs[0].system).toMatch(/cervical health/i);
+    expect(streamArgs[0].messages).toEqual([{ role: "user", content: "Hi" }]);
   });
 
   test("sends prior session history to Claude on a follow-up turn", async () => {
@@ -187,18 +243,21 @@ describe("POST /api/chat", () => {
       ],
     });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
-    const anthropic = mockAnthropic("It's transmitted via skin-to-skin contact...");
+    const anthropic = mockAnthropic("Skin-to-skin contact...");
     vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
 
-    await POST(
+    const res = await POST(
       postRequest({
         message: "How is it transmitted?",
         sessionId: "c3aab8b6-3a89-4dc1-9bbb-dca08fee48f4",
       })
     );
 
-    const [callArgs] = anthropic.messages.create.mock.calls;
-    expect(callArgs[0].messages).toEqual([
+    // Drain the stream so the route's start() block runs to completion.
+    await readNdjsonStream(res);
+
+    const [streamArgs] = anthropic.messages.stream.mock.calls;
+    expect(streamArgs[0].messages).toEqual([
       { role: "user", content: "What is HPV?" },
       { role: "assistant", content: "HPV stands for human papillomavirus..." },
       { role: "user", content: "How is it transmitted?" },
@@ -218,10 +277,12 @@ describe("POST /api/chat", () => {
         sessionId: "c3aab8b6-3a89-4dc1-9bbb-dca08fee48f4",
       })
     );
-    const json = await res.json();
 
-    expect(res.status).toBe(200);
-    expect(json.sessionId).toBe("c3aab8b6-3a89-4dc1-9bbb-dca08fee48f4");
+    const events = await readNdjsonStream(res);
+    expect(events[0]).toEqual({
+      type: "start",
+      sessionId: "c3aab8b6-3a89-4dc1-9bbb-dca08fee48f4",
+    });
     expect(fromChain.sessionInsert).not.toHaveBeenCalled();
     expect(fromChain.messageInsert).toHaveBeenCalledTimes(2);
   });
@@ -271,7 +332,46 @@ describe("POST /api/chat", () => {
     errSpy.mockRestore();
   });
 
-  test("logs but does not fail the request if the assistant-message insert errors", async () => {
+  test("emits start → text → error and persists partial with marker on stream error", async () => {
+    const fromChain = mockSupabaseChain({
+      historyRows: [{ role: "user", content: "Hi" }],
+    });
+    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+
+    // Two text deltas arrive, then the iterator throws on the third pull.
+    const anthropic = mockAnthropicStream(
+      [
+        { type: "content_block_delta", delta: { type: "text_delta", text: "Hello" } },
+        { type: "content_block_delta", delta: { type: "text_delta", text: " there" } },
+      ],
+      { throwAt: 2 }
+    );
+    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const res = await POST(postRequest({ message: "Hi" }));
+    const events = await readNdjsonStream(res);
+
+    expect(events.map((e) => (e as { type: string }).type)).toEqual([
+      "start",
+      "text",
+      "text",
+      "error",
+    ]);
+    expect((events.at(-1) as { type: string; message: string }).message).toBe(
+      "upstream stream boom"
+    );
+
+    // Partial content persisted with the marker
+    const assistantInsert = fromChain.messageInsert.mock.calls.find(
+      (call) => call[0].role === "assistant"
+    );
+    expect(assistantInsert?.[0].content).toMatch(/^Hello there\n\n\[reply was interrupted:/);
+
+    errSpy.mockRestore();
+  });
+
+  test("logs but still emits done if the assistant-message insert errors", async () => {
     // First insert (user) succeeds, second insert (assistant) errors.
     const fromChain = mockSupabaseChain({
       historyRows: [{ role: "user", content: "Hi" }],
@@ -285,41 +385,11 @@ describe("POST /api/chat", () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const res = await POST(postRequest({ message: "Hi" }));
-    const json = await res.json();
+    const events = await readNdjsonStream(res);
 
-    // The user already paid for the Claude call; surface the reply.
-    expect(res.status).toBe(200);
-    expect(json.reply).toBe("Hello");
-    expect(errSpy).toHaveBeenCalled(); // assistant-write failure must be logged
-    errSpy.mockRestore();
-  });
-
-  test("returns 500 when the Anthropic call rejects, without leaking the error", async () => {
-    const fromChain = mockSupabaseChain({
-      historyRows: [{ role: "user", content: "Hi" }],
-    });
-    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
-    const anthropic: MockedAnthropic = {
-      messages: {
-        create: vi.fn().mockRejectedValue(new Error("upstream boom — secret_key=sk-leaked")),
-      },
-    };
-    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-
-    const res = await POST(postRequest({ message: "Hi" }));
-    const json = await res.json();
-
-    expect(res.status).toBe(500);
-    expect(JSON.stringify(json)).not.toContain("sk-leaked");
-    expect(JSON.stringify(json)).not.toContain("secret_key");
-
-    // The user's message was persisted before the Claude call — that's deliberate.
-    expect(fromChain.messageInsert).toHaveBeenCalledTimes(1);
-    expect(fromChain.messageInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ role: "user", content: "Hi" })
-    );
-
+    // The user already saw the reply; surface done normally.
+    expect(events.at(-1)).toEqual({ type: "done" });
+    expect(errSpy).toHaveBeenCalled();
     errSpy.mockRestore();
   });
 });
