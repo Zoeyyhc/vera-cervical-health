@@ -38,6 +38,18 @@ describe("encodeChatStreamEvent", () => {
     expect(text.endsWith("\n")).toBe(true);
     expect(text.match(/\n/g)?.length).toBe(1);
   });
+
+  it("encodes a sources event with the array payload", () => {
+    const out = encodeChatStreamEvent({
+      type: "sources",
+      sources: [{ id: "1", title: "Cancer Council", url: "https://example.com", chunkId: "c1" }],
+    });
+    const parsed = JSON.parse(decoder.decode(out).trim()) as ChatStreamEvent;
+    expect(parsed).toEqual({
+      type: "sources",
+      sources: [{ id: "1", title: "Cancer Council", url: "https://example.com", chunkId: "c1" }],
+    });
+  });
 });
 
 import { parseChatStream } from "./streaming";
@@ -107,5 +119,19 @@ describe("parseChatStream", () => {
 
   it("throws on malformed JSON so the UI can surface the error", async () => {
     await expect(collect(streamFromString("not json\n"))).rejects.toThrow();
+  });
+
+  it("yields a sources event from a serialized line", async () => {
+    const events = await collect(
+      streamFromString(
+        '{"type":"sources","sources":[{"id":"1","title":"Cancer Council","chunkId":"c1"}]}\n'
+      )
+    );
+    expect(events).toEqual([
+      {
+        type: "sources",
+        sources: [{ id: "1", title: "Cancer Council", chunkId: "c1" }],
+      },
+    ]);
   });
 });
