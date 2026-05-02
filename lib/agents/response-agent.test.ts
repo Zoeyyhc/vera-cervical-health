@@ -174,6 +174,25 @@ describe("runResponseAgent", () => {
     expect(args[0].system).toContain("Source 1: HPV is...");
   });
 
+  test("treats empty-string ragContext the same as no ragContext (no 'Retrieved context:' header)", async () => {
+    const anthropic = mockAnthropic({ events: [] });
+    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
+
+    await collect(
+      runResponseAgent({
+        userMessage: "Hi",
+        history: [],
+        ragContext: "", // explicit empty string — the no-match-fallback case from runRagAgent
+      })
+    );
+
+    const args = anthropic.messages.stream.mock.calls[0] as unknown as [
+      { model: string; system: string; messages: unknown[]; max_tokens: number },
+    ];
+    expect(args[0].system).toBe(DEFAULT_SYSTEM_PROMPT);
+    expect(args[0].system).not.toContain("Retrieved context:");
+  });
+
   test("propagates errors thrown during streaming", async () => {
     const anthropic = mockAnthropic({
       events: [{ type: "content_block_delta", delta: { type: "text_delta", text: "partial" } }],
