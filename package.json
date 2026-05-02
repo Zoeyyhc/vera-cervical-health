@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "seed:kb": "tsx --env-file=.env.local scripts/seed-knowledge-base.ts"
+    "seed:kb": "tsx --env-file=.env.local scripts/seed-knowledge-base.ts",
+    "rag:query": "tsx --env-file=.env.local scripts/rag-query.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.91.1",
