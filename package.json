@@ -12,7 +12,8 @@
     "format": "biome check --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "seed:kb": "tsx scripts/seed-knowledge-base.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.91.1",
@@ -46,10 +47,12 @@
     "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^17.4.2",
     "jsdom": "^29.0.2",
     "msw": "^2.13.2",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.1.4"
   }
