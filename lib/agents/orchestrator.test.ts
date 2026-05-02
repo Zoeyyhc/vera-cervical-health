@@ -254,6 +254,43 @@ describe("runOrchestrator", () => {
     });
   });
 
+  test("health_question with zero chunks: logs an operational warning for threshold tuning", async () => {
+    const consoleInfoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("health_question") as never);
+    vi.mocked(runRagAgent).mockResolvedValue({ ragContext: "", ragSources: [] });
+    vi.mocked(runResponseAgent).mockReturnValue(
+      fakeAgentStream([{ type: "text", text: "ok" }]) as never
+    );
+
+    await collectOrchestrator(baseCtx);
+
+    expect(consoleInfoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("health_question returned 0 chunks")
+    );
+    consoleInfoSpy.mockRestore();
+  });
+
+  test("health_question with non-zero chunks: does NOT log the zero-chunk warning", async () => {
+    const consoleInfoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("health_question") as never);
+    vi.mocked(runRagAgent).mockResolvedValue({
+      ragContext: "ctx",
+      ragSources: [{ id: "1", title: "WHO", chunkId: "c1" }],
+    });
+    vi.mocked(runResponseAgent).mockReturnValue(
+      fakeAgentStream([{ type: "text", text: "ok" }]) as never
+    );
+
+    await collectOrchestrator(baseCtx);
+
+    // The dispatch log uses `console.info` too, so filter by the specific message.
+    const zeroChunkLogs = consoleInfoSpy.mock.calls.filter(
+      (args) => typeof args[0] === "string" && args[0].includes("returned 0 chunks")
+    );
+    expect(zeroChunkLogs).toHaveLength(0);
+    consoleInfoSpy.mockRestore();
+  });
+
   // ───── news_request / events_request stubs ─────────────────────────────
 
   test("news_request: yields a stub text chunk; never calls RAG or response agent", async () => {

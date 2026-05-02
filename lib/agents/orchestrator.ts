@@ -121,6 +121,13 @@ export async function* runOrchestrator(
     const { ragContext, ragSources } = await runRagAgent(supabase, {
       userMessage: ctx.userMessage,
     });
+    if (ragSources.length === 0) {
+      // Operational signal for tuning the 0.75 similarity threshold once the
+      // KB grows past the seed. Truncate to 80 chars to keep PII risk low.
+      console.info(
+        `[orchestrator] health_question returned 0 chunks for query: ${ctx.userMessage.slice(0, 80)}`
+      );
+    }
     yield* runResponseAgent({
       userMessage: ctx.userMessage,
       history: ctx.history,
