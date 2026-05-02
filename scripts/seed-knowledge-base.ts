@@ -7,8 +7,10 @@
  *   - Local Supabase running (`supabase start`)
  *   - SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in env
  *     (run `eval "$(supabase status -o env)"` first)
- *   - OPENAI_API_KEY in `.env.local` (loaded explicitly via dotenv —
- *     tsx doesn't auto-load `.env.local` the way Next.js does)
+ *   - All other env vars (ANTHROPIC_API_KEY, OPENAI_API_KEY, RESEND_API_KEY,
+ *     NEWS_API_KEY, SERPAPI_KEY) in `.env.local` — loaded by Node's native
+ *     `--env-file` flag in the npm script (must run before module imports
+ *     because `lib/env.ts` validates all 6 vars at module load).
  *
  * Safe to re-run — clears prior chunks per source before re-ingesting.
  */
@@ -19,9 +21,6 @@ import { ingestDocument } from "@/lib/rag/store";
 import { SEED_DOCUMENTS, type SeedDocument } from "@/supabase/seeds/knowledge/manifest";
 import type { Database } from "@/types/supabase";
 import { createClient } from "@supabase/supabase-js";
-import { config as loadEnv } from "dotenv";
-
-loadEnv({ path: ".env.local" });
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
