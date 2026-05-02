@@ -22,7 +22,7 @@ describe("retrieveChunks", () => {
     vi.clearAllMocks();
   });
 
-  test("calls match_knowledge_chunks with default threshold 0.75 and count 5", async () => {
+  test("calls match_knowledge_chunks with default threshold 0.45 and count 5", async () => {
     const { supabase, rpc } = mockSupabaseRpc([]);
     const queryEmbedding = Array.from({ length: 1536 }, () => 0.1);
 
@@ -31,7 +31,7 @@ describe("retrieveChunks", () => {
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenCalledWith("match_knowledge_chunks", {
       query_embedding: queryEmbedding,
-      match_threshold: 0.75,
+      match_threshold: 0.45,
       match_count: 5,
     });
   });

@@ -1,7 +1,12 @@
 import type { Database } from "@/types/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const DEFAULT_THRESHOLD = 0.75;
+// Empirically tuned 2026-05-03: text-embedding-3-small produces top-similarity
+// scores of 0.54–0.60 for clearly relevant chunks against this KB's seed (see
+// `scripts/rag-query.ts` for measurement). 0.75 (the original spec) returned
+// zero chunks for every typical health question. 0.45 captures the top 3–5
+// chunks per typical query while excluding the noise tail.
+const DEFAULT_THRESHOLD = 0.45;
 const DEFAULT_COUNT = 5;
 
 export type RetrievedChunk = {
@@ -14,7 +19,7 @@ export type RetrievedChunk = {
 };
 
 export type RetrieveOptions = {
-  /** Cosine similarity floor. Default 0.75 (project spec). */
+  /** Cosine similarity floor. Default 0.45 (empirically tuned — see retrieve.ts comment). */
   threshold?: number;
   /** Max chunks returned. Default 5. */
   count?: number;
