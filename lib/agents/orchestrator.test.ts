@@ -142,3 +142,155 @@ describe("classifyIntent", () => {
     errSpy.mockRestore();
   });
 });
+
+import { runRagAgent } from "@/lib/agents/rag-agent";
+import { type AgentChunk, runResponseAgent } from "@/lib/agents/response-agent";
+import type { ChatHistoryMessage } from "@/lib/ai/context-window";
+
+vi.mock("@/lib/agents/response-agent", () => ({
+  runResponseAgent: vi.fn(),
+}));
+
+vi.mock("@/lib/agents/rag-agent", () => ({
+  runRagAgent: vi.fn(),
+}));
+
+import { type OrchestratorContext, runOrchestrator } from "./orchestrator";
+
+const fakeSupabase = {} as unknown as Parameters<typeof runOrchestrator>[0];
+
+function fakeAgentStream(chunks: AgentChunk[]) {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const c of chunks) yield c;
+    },
+  };
+}
+
+async function collectOrchestrator(ctx: OrchestratorContext): Promise<AgentChunk[]> {
+  const out: AgentChunk[] = [];
+  for await (const c of runOrchestrator(fakeSupabase, ctx)) out.push(c);
+  return out;
+}
+
+const baseCtx: OrchestratorContext = {
+  userMessage: "What is HPV?",
+  history: [] as ChatHistoryMessage[],
+};
+
+describe("runOrchestrator", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Default classifier mock: general_chat. Tests override per case.
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("general_chat") as never);
+  });
+
+  // ───── general_chat ────────────────────────────────────────────────────
+
+  test("general_chat: skips RAG and yields response-agent chunks directly", async () => {
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("general_chat") as never);
+    vi.mocked(runResponseAgent).mockReturnValue(
+      fakeAgentStream([{ type: "text", text: "Hello!" }]) as never
+    );
+
+    const chunks = await collectOrchestrator(baseCtx);
+
+    expect(runRagAgent).not.toHaveBeenCalled();
+    expect(runResponseAgent).toHaveBeenCalledTimes(1);
+    expect(runResponseAgent).toHaveBeenCalledWith({
+      userMessage: baseCtx.userMessage,
+      history: baseCtx.history,
+    });
+    expect(chunks).toEqual([{ type: "text", text: "Hello!" }]);
+  });
+
+  // ───── health_question ─────────────────────────────────────────────────
+
+  test("health_question: calls runRagAgent and threads ragContext + ragSources into the response agent", async () => {
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("health_question") as never);
+    const ragContext = "[1] (Source A) HPV is a common virus.";
+    const ragSources = [{ id: "1", title: "Source A", chunkId: "uuid-1" }];
+    vi.mocked(runRagAgent).mockResolvedValue({ ragContext, ragSources });
+    vi.mocked(runResponseAgent).mockReturnValue(
+      fakeAgentStream([
+        { type: "text", text: "HPV is..." },
+        { type: "sources", sources: ragSources },
+      ]) as never
+    );
+
+    const chunks = await collectOrchestrator(baseCtx);
+
+    expect(runRagAgent).toHaveBeenCalledTimes(1);
+    expect(runRagAgent).toHaveBeenCalledWith(fakeSupabase, {
+      userMessage: baseCtx.userMessage,
+    });
+    expect(runResponseAgent).toHaveBeenCalledTimes(1);
+    expect(runResponseAgent).toHaveBeenCalledWith({
+      userMessage: baseCtx.userMessage,
+      history: baseCtx.history,
+      ragContext,
+      ragSources,
+    });
+    expect(chunks).toEqual([
+      { type: "text", text: "HPV is..." },
+      { type: "sources", sources: ragSources },
+    ]);
+  });
+
+  test("health_question with empty RAG result: still calls response agent (with empty ragContext/ragSources)", async () => {
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("health_question") as never);
+    vi.mocked(runRagAgent).mockResolvedValue({ ragContext: "", ragSources: [] });
+    vi.mocked(runResponseAgent).mockReturnValue(
+      fakeAgentStream([{ type: "text", text: "I don't have specific info..." }]) as never
+    );
+
+    await collectOrchestrator(baseCtx);
+
+    expect(runResponseAgent).toHaveBeenCalledWith({
+      userMessage: baseCtx.userMessage,
+      history: baseCtx.history,
+      ragContext: "",
+      ragSources: [],
+    });
+  });
+
+  // ───── news_request / events_request stubs ─────────────────────────────
+
+  test("news_request: yields a stub text chunk; never calls RAG or response agent", async () => {
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("news_request") as never);
+
+    const chunks = await collectOrchestrator(baseCtx);
+
+    expect(runRagAgent).not.toHaveBeenCalled();
+    expect(runResponseAgent).not.toHaveBeenCalled();
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toEqual({
+      type: "text",
+      text: expect.stringContaining("news"),
+    });
+  });
+
+  test("events_request: yields a stub text chunk; never calls RAG or response agent", async () => {
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("events_request") as never);
+
+    const chunks = await collectOrchestrator(baseCtx);
+
+    expect(runRagAgent).not.toHaveBeenCalled();
+    expect(runResponseAgent).not.toHaveBeenCalled();
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toEqual({
+      type: "text",
+      text: expect.stringContaining("events"),
+    });
+  });
+
+  // ───── error propagation ───────────────────────────────────────────────
+
+  test("propagates errors thrown by runRagAgent on the health_question path", async () => {
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("health_question") as never);
+    vi.mocked(runRagAgent).mockRejectedValue(new Error("rag exploded"));
+
+    await expect(collectOrchestrator(baseCtx)).rejects.toThrow("rag exploded");
+    expect(runResponseAgent).not.toHaveBeenCalled();
+  });
+});

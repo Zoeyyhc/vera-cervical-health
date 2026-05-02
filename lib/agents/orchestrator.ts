@@ -73,6 +73,76 @@ function fallbackIntent(message: string): Intent {
   if (EVENTS_RE.test(message)) return "events_request";
   // No keyword for health_question — too easy to over-fire on common health
   // terms in small-talk turns. Default to general_chat; the response agent
-  // handles it the same way #27's dispatch will.
+  // handles it the same way the dispatch does below.
   return "general_chat";
+}
+
+import { runRagAgent } from "@/lib/agents/rag-agent";
+import { type AgentChunk, runResponseAgent } from "@/lib/agents/response-agent";
+import type { ChatHistoryMessage } from "@/lib/ai/context-window";
+import type { Database } from "@/types/supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+const NEWS_STUB =
+  "Latest health news support is coming soon. For now I can answer general questions about cervical health — what would you like to know?";
+const EVENTS_STUB =
+  "Health events support is coming soon. For now I can answer general questions about cervical health — what would you like to know?";
+
+export type OrchestratorContext = {
+  /** The new user turn. Same shape as the response agent's ctx. */
+  userMessage: string;
+  /** Prior conversation, oldest first. Does NOT include `userMessage`. */
+  history: ChatHistoryMessage[];
+};
+
+/**
+ * Multi-agent orchestrator. Classifies the user's intent and dispatches:
+ *
+ * - `health_question` → `runRagAgent` → `runResponseAgent` (with ragContext + ragSources)
+ * - `general_chat`    → `runResponseAgent` directly
+ * - `news_request`    → static stub text (real agent lands in #29)
+ * - `events_request`  → static stub text (real agent lands in #29)
+ *
+ * Returns an `AsyncIterable<AgentChunk>` with the same wire shape as
+ * `runResponseAgent` so the route doesn't need to know about dispatch.
+ *
+ * Per CLAUDE.md: agents don't call each other directly — the orchestrator
+ * coordinates. Takes the auth-bound Supabase client (used by RAG); the route
+ * still owns the connection.
+ */
+export async function* runOrchestrator(
+  supabase: SupabaseClient<Database>,
+  ctx: OrchestratorContext
+): AsyncIterable<AgentChunk> {
+  const { intent } = await classifyIntent(ctx.userMessage);
+  console.info(`[orchestrator] dispatch: ${intent}`);
+
+  if (intent === "health_question") {
+    const { ragContext, ragSources } = await runRagAgent(supabase, {
+      userMessage: ctx.userMessage,
+    });
+    yield* runResponseAgent({
+      userMessage: ctx.userMessage,
+      history: ctx.history,
+      ragContext,
+      ragSources,
+    });
+    return;
+  }
+
+  if (intent === "news_request") {
+    yield { type: "text", text: NEWS_STUB };
+    return;
+  }
+
+  if (intent === "events_request") {
+    yield { type: "text", text: EVENTS_STUB };
+    return;
+  }
+
+  // general_chat (default)
+  yield* runResponseAgent({
+    userMessage: ctx.userMessage,
+    history: ctx.history,
+  });
 }
