@@ -1,5 +1,4 @@
-import { classifyIntent } from "@/lib/agents/orchestrator";
-import { runResponseAgent } from "@/lib/agents/response-agent";
+import { runOrchestrator } from "@/lib/agents/orchestrator";
 import { loadRecentMessages } from "@/lib/ai/context-window";
 import { type ChatStreamEvent, encodeChatStreamEvent } from "@/lib/ai/streaming";
 import { createClient } from "@/lib/supabase/server";
@@ -27,12 +26,6 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return Response.json({ error: "invalid_request" }, { status: 400 });
   }
-
-  // Pre-step: classify the user's intent. Logged for now; #27 wires it into
-  // dispatch. classifyIntent never throws — on internal failure it returns a
-  // fallback intent — so we don't gate the rest of the request on it.
-  const { intent } = await classifyIntent(parsed.data.message);
-  console.info(`[/api/chat] classified intent: ${intent}`);
 
   // 3. Resolve session id — create one if the caller didn't supply it
   let sessionId = parsed.data.sessionId;
@@ -94,7 +87,7 @@ export async function POST(request: Request) {
       let assistantText = "";
       let collectedSources: import("@/types/agents").Source[] | null = null;
       try {
-        for await (const chunk of runResponseAgent({
+        for await (const chunk of runOrchestrator(supabase, {
           userMessage,
           history,
         })) {

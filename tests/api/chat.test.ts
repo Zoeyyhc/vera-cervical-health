@@ -6,25 +6,15 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
-vi.mock("@/lib/ai/anthropic", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/ai/anthropic")>();
-  return {
-    ...actual,
-    getAnthropicClient: vi.fn(),
-  };
-});
+vi.mock("@/lib/agents/orchestrator", () => ({
+  runOrchestrator: vi.fn(),
+}));
 
 import { POST } from "@/app/api/chat/route";
-import { getAnthropicClient } from "@/lib/ai/anthropic";
+import { runOrchestrator } from "@/lib/agents/orchestrator";
+import type { AgentChunk } from "@/lib/agents/response-agent";
 import { parseChatStream } from "@/lib/ai/streaming";
 import { createClient } from "@/lib/supabase/server";
-
-type MockedAnthropic = {
-  messages: {
-    create: ReturnType<typeof vi.fn>; // legacy — no longer called by the route
-    stream: ReturnType<typeof vi.fn>;
-  };
-};
 
 type SupabaseFromMock = {
   from: ReturnType<typeof vi.fn>;
@@ -88,55 +78,31 @@ function mockSupabase(
   };
 }
 
-type StreamEventLike = {
-  type: "content_block_delta";
-  delta: { type: "text_delta"; text: string };
+type OrchestratorMockOpts = {
+  chunks: AgentChunk[];
+  /** If set, the iterator throws on the i-th pull (0-indexed). throwAt === chunks.length throws after the last yield. */
+  throwAt?: number;
 };
 
-// The /api/chat route now calls messages.create() once for the intent
-// classifier (#26) before messages.stream() for the response agent. Default
-// the classifier to general_chat so existing assertions about routing
-// behavior are unaffected.
-const DEFAULT_CLASSIFIER_REPLY = {
-  content: [{ type: "text", text: "general_chat" }],
-};
-
-/** Mocks the Anthropic SDK with a `messages.stream(...)` returning the given events as an async iterable. */
-function mockAnthropic(reply: string): MockedAnthropic {
-  return {
-    messages: {
-      create: vi.fn().mockResolvedValue(DEFAULT_CLASSIFIER_REPLY),
-      stream: vi.fn(() => ({
-        async *[Symbol.asyncIterator]() {
-          yield {
-            type: "content_block_delta",
-            delta: { type: "text_delta", text: reply },
-          } as StreamEventLike;
-        },
-      })),
+/**
+ * Mocks `runOrchestrator` to yield a controlled set of `AgentChunk`s.
+ * Replaces the SDK-level mocking from #28 — route tests now exercise the
+ * route's iteration/persistence/wire-format in isolation; orchestrator
+ * dispatch and agent internals are tested in their own files.
+ */
+function mockOrchestratorYields(opts: OrchestratorMockOpts | AgentChunk[]) {
+  const config: OrchestratorMockOpts = Array.isArray(opts) ? { chunks: opts } : opts;
+  vi.mocked(runOrchestrator).mockReturnValue({
+    async *[Symbol.asyncIterator]() {
+      for (let i = 0; i < config.chunks.length; i++) {
+        if (config.throwAt === i) throw new Error("upstream stream boom");
+        yield config.chunks[i];
+      }
+      if (config.throwAt === config.chunks.length) {
+        throw new Error("upstream stream boom");
+      }
     },
-  };
-}
-
-/** Mocks `messages.stream(...)` so iteration yields each event in order, optionally throwing at index `throwAt`. */
-function mockAnthropicStream(
-  events: StreamEventLike[],
-  opts: { throwAt?: number } = {}
-): MockedAnthropic {
-  return {
-    messages: {
-      create: vi.fn().mockResolvedValue(DEFAULT_CLASSIFIER_REPLY),
-      stream: vi.fn(() => ({
-        async *[Symbol.asyncIterator]() {
-          for (let i = 0; i < events.length; i++) {
-            if (opts.throwAt === i) throw new Error("upstream stream boom");
-            yield events[i];
-          }
-          if (opts.throwAt === events.length) throw new Error("upstream stream boom");
-        },
-      })),
-    },
-  };
+  } as never);
 }
 
 function postRequest(body: unknown): Request {
@@ -159,13 +125,15 @@ describe("POST /api/chat", () => {
     vi.clearAllMocks();
   });
 
+  // ───── Bail-before-stream paths ────────────────────────────────────────
+
   test("returns 401 when there is no Supabase user", async () => {
     vi.mocked(createClient).mockReturnValue(mockSupabase(null) as never);
 
     const res = await POST(postRequest({ message: "hi" }));
 
     expect(res.status).toBe(401);
-    expect(getAnthropicClient).not.toHaveBeenCalled();
+    expect(runOrchestrator).not.toHaveBeenCalled();
   });
 
   test("returns 400 when the body fails Zod validation", async () => {
@@ -174,7 +142,7 @@ describe("POST /api/chat", () => {
     const res = await POST(postRequest({ message: "" }));
 
     expect(res.status).toBe(400);
-    expect(getAnthropicClient).not.toHaveBeenCalled();
+    expect(runOrchestrator).not.toHaveBeenCalled();
   });
 
   test("returns 400 when the body is not valid JSON", async () => {
@@ -183,18 +151,63 @@ describe("POST /api/chat", () => {
     const res = await POST(postRequest("not json"));
 
     expect(res.status).toBe(400);
-    expect(getAnthropicClient).not.toHaveBeenCalled();
+    expect(runOrchestrator).not.toHaveBeenCalled();
   });
+
+  test("returns 500 if creating the chat_sessions row fails", async () => {
+    const fromChain = mockSupabaseChain({ sessionInsertError: new Error("db down") });
+    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const res = await POST(postRequest({ message: "Hi" }));
+
+    expect(res.status).toBe(500);
+    expect(runOrchestrator).not.toHaveBeenCalled();
+    expect(fromChain.messageInsert).not.toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  test("returns 404 when the user-message insert fails (RLS denial / unowned session)", async () => {
+    const fromChain = mockSupabaseChain({ messageInsertError: new Error("RLS violation") });
+    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const res = await POST(
+      postRequest({
+        message: "Hi",
+        sessionId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      })
+    );
+
+    expect(res.status).toBe(404);
+    expect(runOrchestrator).not.toHaveBeenCalled();
+    expect(fromChain.messageInsert).toHaveBeenCalledTimes(1); // only the failed user write
+    errSpy.mockRestore();
+  });
+
+  test("returns 500 when loading session history fails", async () => {
+    const fromChain = mockSupabaseChain({
+      historyError: new Error("history query exploded"),
+    });
+    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const res = await POST(postRequest({ message: "Hi" }));
+
+    expect(res.status).toBe(500);
+    expect(runOrchestrator).not.toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  // ───── Streaming success paths ─────────────────────────────────────────
 
   test("creates a new session, streams text deltas, persists on done", async () => {
     const fromChain = mockSupabaseChain({
       newSessionId: "22222222-2222-4222-8222-222222222222",
-      historyRows: [], // no prior turns — brand-new session; agent appends "Hi"
+      historyRows: [], // brand-new session
     });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
-
-    const anthropic = mockAnthropic("Hello there!");
-    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
+    mockOrchestratorYields([{ type: "text", text: "Hello there!" }]);
 
     const res = await POST(postRequest({ message: "Hi" }));
     expect(res.headers.get("content-type")).toContain("application/x-ndjson");
@@ -210,7 +223,6 @@ describe("POST /api/chat", () => {
     });
     expect(events.at(-1)).toEqual({ type: "done" });
 
-    // Order: session created → user msg written → Claude streamed → assistant msg persisted with full content
     expect(fromChain.sessionInsert).toHaveBeenCalledWith({ user_id: "u1", title: null });
     expect(fromChain.messageInsert).toHaveBeenNthCalledWith(1, {
       session_id: "22222222-2222-4222-8222-222222222222",
@@ -224,24 +236,21 @@ describe("POST /api/chat", () => {
       sources: null,
     });
 
-    expect(anthropic.messages.stream).toHaveBeenCalledTimes(1);
-    const [streamArgs] = anthropic.messages.stream.mock.calls;
-    expect(streamArgs[0].model).toBe("claude-sonnet-4-6");
-    expect(streamArgs[0].system).toMatch(/cervical health/i);
-    expect(streamArgs[0].messages).toEqual([{ role: "user", content: "Hi" }]);
+    // Orchestrator was called with the supabase client + userMessage + (empty) history
+    expect(runOrchestrator).toHaveBeenCalledTimes(1);
+    const [, ctxArg] = vi.mocked(runOrchestrator).mock.calls[0];
+    expect(ctxArg).toEqual({ userMessage: "Hi", history: [] });
   });
 
-  test("sends prior session history to Claude on a follow-up turn", async () => {
+  test("passes prior session history through to the orchestrator on a follow-up turn", async () => {
     const fromChain = mockSupabaseChain({
-      // historyRows is PRIOR turns only — the agent appends the current msg.
       historyRows: [
         { role: "user", content: "What is HPV?" },
         { role: "assistant", content: "HPV stands for human papillomavirus..." },
       ],
     });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
-    const anthropic = mockAnthropic("Skin-to-skin contact...");
-    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
+    mockOrchestratorYields([{ type: "text", text: "Skin-to-skin contact..." }]);
 
     const res = await POST(
       postRequest({
@@ -250,23 +259,22 @@ describe("POST /api/chat", () => {
       })
     );
 
-    // Drain the stream so the route's start() block runs to completion.
     await readNdjsonStream(res);
 
-    const [streamArgs] = anthropic.messages.stream.mock.calls;
-    expect(streamArgs[0].messages).toEqual([
-      { role: "user", content: "What is HPV?" },
-      { role: "assistant", content: "HPV stands for human papillomavirus..." },
-      { role: "user", content: "How is it transmitted?" },
-    ]);
+    const [, ctxArg] = vi.mocked(runOrchestrator).mock.calls[0];
+    expect(ctxArg).toEqual({
+      userMessage: "How is it transmitted?",
+      history: [
+        { role: "user", content: "What is HPV?" },
+        { role: "assistant", content: "HPV stands for human papillomavirus..." },
+      ],
+    });
   });
 
   test("with a provided sessionId, reuses it (no new session insert)", async () => {
-    const fromChain = mockSupabaseChain({
-      historyRows: [], // brand-new turn in an existing session; no prior messages
-    });
+    const fromChain = mockSupabaseChain({ historyRows: [] });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
-    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropic("ok") as never);
+    mockOrchestratorYields([{ type: "text", text: "ok" }]);
 
     const res = await POST(
       postRequest({
@@ -284,74 +292,18 @@ describe("POST /api/chat", () => {
     expect(fromChain.messageInsert).toHaveBeenCalledTimes(2);
   });
 
-  test("returns 500 if creating the chat_sessions row fails", async () => {
-    const fromChain = mockSupabaseChain({ sessionInsertError: new Error("db down") });
-    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
-    // The classifier (#26) calls getAnthropicClient unconditionally; stock
-    // it so it succeeds, then assert the response agent's stream() never ran.
-    const anthropic = mockAnthropic("ignored");
-    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-
-    const res = await POST(postRequest({ message: "Hi" }));
-
-    expect(res.status).toBe(500);
-    expect(anthropic.messages.stream).not.toHaveBeenCalled();
-    expect(fromChain.messageInsert).not.toHaveBeenCalled();
-    errSpy.mockRestore();
-  });
-
-  test("returns 404 when the user-message insert fails (RLS denial / unowned session)", async () => {
-    const fromChain = mockSupabaseChain({ messageInsertError: new Error("RLS violation") });
-    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
-    const anthropic = mockAnthropic("ignored");
-    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-
-    const res = await POST(
-      postRequest({
-        message: "Hi",
-        sessionId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-      })
-    );
-
-    expect(res.status).toBe(404);
-    expect(anthropic.messages.stream).not.toHaveBeenCalled();
-    expect(fromChain.messageInsert).toHaveBeenCalledTimes(1); // only the failed user write
-    errSpy.mockRestore();
-  });
-
-  test("returns 500 when loading session history fails", async () => {
-    const fromChain = mockSupabaseChain({
-      historyError: new Error("history query exploded"),
-    });
-    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
-    const anthropic = mockAnthropic("ignored");
-    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-
-    const res = await POST(postRequest({ message: "Hi" }));
-
-    expect(res.status).toBe(500);
-    expect(anthropic.messages.stream).not.toHaveBeenCalled();
-    errSpy.mockRestore();
-  });
+  // ───── Streaming error paths ───────────────────────────────────────────
 
   test("emits start → text → error and persists partial with marker on stream error", async () => {
-    const fromChain = mockSupabaseChain({
-      historyRows: [],
-    });
+    const fromChain = mockSupabaseChain({ historyRows: [] });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
-
-    // Two text deltas arrive, then the iterator throws on the third pull.
-    const anthropic = mockAnthropicStream(
-      [
-        { type: "content_block_delta", delta: { type: "text_delta", text: "Hello" } },
-        { type: "content_block_delta", delta: { type: "text_delta", text: " there" } },
+    mockOrchestratorYields({
+      chunks: [
+        { type: "text", text: "Hello" },
+        { type: "text", text: " there" },
       ],
-      { throwAt: 2 }
-    );
-    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
+      throwAt: 2,
+    });
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const res = await POST(postRequest({ message: "Hi" }));
@@ -378,15 +330,12 @@ describe("POST /api/chat", () => {
 
   test("logs but still emits done if the assistant-message insert errors", async () => {
     // First insert (user) succeeds, second insert (assistant) errors.
-    const fromChain = mockSupabaseChain({
-      historyRows: [],
-    });
+    const fromChain = mockSupabaseChain({ historyRows: [] });
     fromChain.messageInsert
       .mockResolvedValueOnce({ data: null, error: null })
       .mockResolvedValueOnce({ data: null, error: new Error("write race") });
-
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
-    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropic("Hello") as never);
+    mockOrchestratorYields([{ type: "text", text: "Hello" }]);
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const res = await POST(postRequest({ message: "Hi" }));
