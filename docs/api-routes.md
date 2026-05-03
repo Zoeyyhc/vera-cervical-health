@@ -8,7 +8,7 @@ All route handlers are in `app/api/` using Next.js App Router conventions (`rout
 |---|---|---|---|
 | `/api/chat` | POST | `user` | Main agent orchestration entry point. Streams token-by-token. |
 | `/api/chat/[sessionId]` | GET | `user` | Fetch message history for a session. |
-| `/api/clinics/search` | GET | None (public) | Proxy to Google Places Text Search API. |
+| `/api/clinics/search` | GET | None (public) | Proxy to Google Places API (New) — Text Search endpoint. |
 | `/api/news` | GET | None (public) | Proxy to NewsAPI. Keeps `NEWS_API_KEY` server-side. |
 | `/api/events` | GET | None (public) | Proxy to SerpAPI Google Events. Keeps `SERPAPI_KEY` server-side. |
 | `/api/embeddings/ingest` | POST | `admin` | Ingest a knowledge document into pgvector. |
@@ -23,8 +23,13 @@ All route handlers are in `app/api/` using Next.js App Router conventions (`rout
 
 **Auth:** `user` role required  
 **Body:** `{ sessionId: string, message: string }`  
-**Response:** Streamed text (token-by-token)  
-**Notes:** Entry point for the full agent pipeline. Orchestrator classifies intent and routes to RAG, News, or Events Agent. Response Agent streams the final reply.
+**Response:** Streamed NDJSON of `start` / `text` / `sources` / `done` / `error` events.  
+**Notes:** Entry point for the full agent pipeline. The orchestrator classifies intent and dispatches:
+
+- `health_question` → RAG agent → response agent (RAG chunks injected as grounding context)
+- `news_request` → news agent → response agent (news headlines injected as grounding context). Static fallback text when NewsAPI returns nothing.
+- `events_request` → events agent → response agent (events injected as grounding context). The route reads `profiles.locale` and threads it as a location hint. Static fallback text when (a) no location can be resolved, or (b) SerpAPI returns nothing.
+- `general_chat` → response agent directly
 
 ### `GET /api/chat/[sessionId]`
 
@@ -35,7 +40,7 @@ All route handlers are in `app/api/` using Next.js App Router conventions (`rout
 
 **Auth:** None  
 **Query params:** `location: string`, `keyword?: string`  
-**Proxied to:** Google Places Text Search API (`NEXT_PUBLIC_GOOGLE_MAPS_KEY` injected server-side)  
+**Proxied to:** Google Places API (New) — Text Search (`POST https://places.googleapis.com/v1/places:searchText`). `NEXT_PUBLIC_GOOGLE_MAPS_KEY` injected server-side via `X-Goog-Api-Key` header. Field mask set via `X-Goog-FieldMask` header.  
 **Response:** `{ clinics: ClinicResult[] }`  
 **Notes:** The `/clinics` UI page calls this directly — no agent involvement.
 
@@ -83,4 +88,4 @@ All external API keys are server-side only. Never expose them in the response bo
 Browser → /api/<service> → External API (key injected server-side only)
 ```
 
-Services using this pattern: Google Places, NewsAPI, SerpAPI.
+Services using this pattern: Google Places API (New), NewsAPI, SerpAPI.
