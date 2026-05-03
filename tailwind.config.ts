@@ -50,6 +50,11 @@ const config: Config = {
         container: "16px",
         pill: "9999px",
       },
+      boxShadow: {
+        "btn-inset":
+          "inset 0 0.5px 0 0 rgba(255,255,255,0.2), inset 0 0 0 0.5px rgba(0,0,0,0.2), 0 1px 2px 0 rgba(0,0,0,0.05)",
+        "focus-soft": "0 4px 12px rgba(0,0,0,0.1)",
+      },
       spacing: {
         "10": "10px",
         "12": "12px",
