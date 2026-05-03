@@ -1,5 +1,6 @@
 "use client";
 
+import { MarkdownMessage } from "@/components/markdown-message";
 import { Button } from "@/components/ui/button";
 import { parseChatStream } from "@/lib/ai/streaming";
 import type { Source } from "@/types/agents";
@@ -186,13 +187,23 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       ? "text-muted-gray border-border border bg-white/20"
       : "text-charcoal border-border border bg-white/60";
 
+  const renderBody = () => {
+    if (!message.content) {
+      return isStreaming ? <TypingDots /> : null;
+    }
+    if (isUser) {
+      return message.content;
+    }
+    return <MarkdownMessage content={message.content} />;
+  };
+
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[85%]">
         <div
-          className={`whitespace-pre-wrap rounded-lg px-4 py-2.5 text-sm leading-relaxed ${bubbleClass}`}
+          className={`${isUser ? "whitespace-pre-wrap" : ""} rounded-lg px-4 py-2.5 text-sm leading-relaxed ${bubbleClass}`}
         >
-          {message.content || (isStreaming ? <TypingDots /> : null)}
+          {renderBody()}
         </div>
         {message.role === "assistant" && <CitationChips sources={message.sources} />}
       </div>
