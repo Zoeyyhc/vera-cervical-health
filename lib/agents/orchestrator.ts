@@ -77,31 +77,41 @@ function fallbackIntent(message: string): Intent {
   return "general_chat";
 }
 
+import { runEventsAgent } from "@/lib/agents/events-agent";
+import { runNewsAgent } from "@/lib/agents/news-agent";
 import { runRagAgent } from "@/lib/agents/rag-agent";
 import { type AgentChunk, runResponseAgent } from "@/lib/agents/response-agent";
 import type { ChatHistoryMessage } from "@/lib/ai/context-window";
 import type { Database } from "@/types/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const NEWS_STUB =
-  "Latest health news support is coming soon. For now I can answer general questions about cervical health — what would you like to know?";
-const EVENTS_STUB =
-  "Health events support is coming soon. For now I can answer general questions about cervical health — what would you like to know?";
+const NEWS_EMPTY_FALLBACK =
+  "I couldn't find any recent health news right now. Try again in a bit, or ask me about cervical health topics directly.";
+const EVENTS_NEEDS_LOCATION_FALLBACK =
+  "Which city are you in? I can look up cervical health events near you.";
+const EVENTS_EMPTY_FALLBACK =
+  "I couldn't find any upcoming health events for that location right now. Try a nearby city, or check back later.";
 
 export type OrchestratorContext = {
   /** The new user turn. Same shape as the response agent's ctx. */
   userMessage: string;
   /** Prior conversation, oldest first. Does NOT include `userMessage`. */
   history: ChatHistoryMessage[];
+  /**
+   * Optional `profiles.locale` for the signed-in user. Currently only used by
+   * the events agent as a location hint; the orchestrator threads it through
+   * but does not require it.
+   */
+  locale?: string | null;
 };
 
 /**
  * Multi-agent orchestrator. Classifies the user's intent and dispatches:
  *
- * - `health_question` → `runRagAgent` → `runResponseAgent` (with ragContext + ragSources)
+ * - `health_question` → `runRagAgent` → `runResponseAgent` (with grounding fields)
+ * - `news_request`    → `runNewsAgent` → `runResponseAgent` (or static fallback when empty)
+ * - `events_request`  → `runEventsAgent` → `runResponseAgent` (or static fallback when empty / needsLocation)
  * - `general_chat`    → `runResponseAgent` directly
- * - `news_request`    → static stub text (real agent lands in #29)
- * - `events_request`  → static stub text (real agent lands in #29)
  *
  * Returns an `AsyncIterable<AgentChunk>` with the same wire shape as
  * `runResponseAgent` so the route doesn't need to know about dispatch.
@@ -131,19 +141,46 @@ export async function* runOrchestrator(
     yield* runResponseAgent({
       userMessage: ctx.userMessage,
       history: ctx.history,
-      ragContext,
-      ragSources,
+      groundingContext: ragContext,
+      groundingSources: ragSources,
     });
     return;
   }
 
   if (intent === "news_request") {
-    yield { type: "text", text: NEWS_STUB };
+    const { newsContext, newsSources } = await runNewsAgent({ userMessage: ctx.userMessage });
+    if (newsSources.length === 0) {
+      yield { type: "text", text: NEWS_EMPTY_FALLBACK };
+      return;
+    }
+    yield* runResponseAgent({
+      userMessage: ctx.userMessage,
+      history: ctx.history,
+      groundingContext: `Recent news (last 7 days):\n${newsContext}`,
+      groundingSources: newsSources,
+    });
     return;
   }
 
   if (intent === "events_request") {
-    yield { type: "text", text: EVENTS_STUB };
+    const { eventsContext, eventsSources, needsLocation } = await runEventsAgent({
+      userMessage: ctx.userMessage,
+      locale: ctx.locale,
+    });
+    if (needsLocation) {
+      yield { type: "text", text: EVENTS_NEEDS_LOCATION_FALLBACK };
+      return;
+    }
+    if (eventsSources.length === 0) {
+      yield { type: "text", text: EVENTS_EMPTY_FALLBACK };
+      return;
+    }
+    yield* runResponseAgent({
+      userMessage: ctx.userMessage,
+      history: ctx.history,
+      groundingContext: `Upcoming events:\n${eventsContext}`,
+      groundingSources: eventsSources,
+    });
     return;
   }
 

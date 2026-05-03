@@ -154,7 +154,7 @@ describe("runResponseAgent", () => {
     expect(args[0].system).toBe("You are a custom assistant.");
   });
 
-  test("appends ragContext to the system prompt when provided", async () => {
+  test("appends groundingContext to the system prompt when provided", async () => {
     const anthropic = mockAnthropic({ events: [] });
     vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
 
@@ -162,7 +162,7 @@ describe("runResponseAgent", () => {
       runResponseAgent({
         userMessage: "Hi",
         history: [],
-        ragContext: "Source 1: HPV is...",
+        groundingContext: "Source 1: HPV is...",
       })
     );
 
@@ -174,7 +174,7 @@ describe("runResponseAgent", () => {
     expect(args[0].system).toContain("Source 1: HPV is...");
   });
 
-  test("treats empty-string ragContext the same as no ragContext (no 'Retrieved context:' header)", async () => {
+  test("treats empty-string groundingContext the same as absent (no 'Retrieved context:' header)", async () => {
     const anthropic = mockAnthropic({ events: [] });
     vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
 
@@ -182,7 +182,7 @@ describe("runResponseAgent", () => {
       runResponseAgent({
         userMessage: "Hi",
         history: [],
-        ragContext: "", // explicit empty string — the no-match-fallback case from runRagAgent
+        groundingContext: "", // explicit empty — the no-match case from runRagAgent
       })
     );
 
@@ -205,7 +205,7 @@ describe("runResponseAgent", () => {
     );
   });
 
-  test("emits a sources chunk after text when ctx.ragSources is non-empty", async () => {
+  test("emits a sources chunk after text when ctx.groundingSources is non-empty", async () => {
     const anthropic = mockAnthropic({
       events: [{ type: "content_block_delta", delta: { type: "text_delta", text: "Hi" } }],
     });
@@ -215,7 +215,7 @@ describe("runResponseAgent", () => {
       runResponseAgent({
         userMessage: "What is HPV?",
         history: [],
-        ragSources: [
+        groundingSources: [
           { id: "1", title: "Cancer Council", url: "https://example.com", chunkId: "c1" },
         ],
       })
@@ -229,19 +229,19 @@ describe("runResponseAgent", () => {
     ]);
   });
 
-  test("does not emit a sources chunk when ctx.ragSources is empty or absent", async () => {
+  test("does not emit a sources chunk when ctx.groundingSources is empty or absent", async () => {
     const anthropic = mockAnthropic({
       events: [{ type: "content_block_delta", delta: { type: "text_delta", text: "Hi" } }],
     });
     vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
 
-    // ragSources omitted entirely
+    // groundingSources omitted entirely
     const chunksNoField = await collect(runResponseAgent({ userMessage: "Hi", history: [] }));
     expect(chunksNoField).toEqual([{ type: "text", text: "Hi" }]);
 
-    // ragSources present but empty
+    // groundingSources present but empty
     const chunksEmpty = await collect(
-      runResponseAgent({ userMessage: "Hi", history: [], ragSources: [] })
+      runResponseAgent({ userMessage: "Hi", history: [], groundingSources: [] })
     );
     expect(chunksEmpty).toEqual([{ type: "text", text: "Hi" }]);
   });
