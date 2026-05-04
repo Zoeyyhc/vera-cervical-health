@@ -6,7 +6,6 @@ import { ClinicList } from "@/components/clinics/clinic-list";
 import { ClinicLoadingSkeleton } from "@/components/clinics/clinic-loading-skeleton";
 import { ClinicMap } from "@/components/clinics/clinic-map";
 import { ClinicSearchBar } from "@/components/clinics/clinic-search-bar";
-import { MOCK_CLINICS } from "@/lib/clinics/mock-data";
 import type { ClinicResult } from "@/types/clinic";
 import { List as ListIcon, Map as MapIcon } from "lucide-react";
 import { useState } from "react";
@@ -16,35 +15,38 @@ type Status = "idle" | "loading" | "ok" | "empty" | "error";
 export default function ClinicsPage() {
   const [keyword, setKeyword] = useState("");
   const [location, setLocation] = useState("");
-  const [results, setResults] = useState<ClinicResult[]>(MOCK_CLINICS);
+  const [results, setResults] = useState<ClinicResult[]>([]);
   const [status, setStatus] = useState<Status>("idle");
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<"list" | "map">("list");
 
-  // Mock search until EPIC5-05 wires /api/clinics/search.
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (!location.trim()) return;
     setStatus("loading");
     setResults([]);
     setExpandedPlaceId(null);
     setSelectedPlaceId(null);
-    setTimeout(() => {
-      const kw = keyword.trim().toLowerCase();
-      const filtered = kw
-        ? MOCK_CLINICS.filter(
-            (c) =>
-              c.name.toLowerCase().includes(kw) || c.formattedAddress.toLowerCase().includes(kw)
-          )
-        : MOCK_CLINICS;
-      if (filtered.length === 0) {
-        setResults([]);
+    const params = new URLSearchParams({ location });
+    if (keyword.trim()) params.set("keyword", keyword.trim());
+    try {
+      const res = await fetch(`/api/clinics/search?${params.toString()}`);
+      if (!res.ok) {
+        setStatus("error");
+        return;
+      }
+      const data = (await res.json()) as { clinics?: ClinicResult[] };
+      const clinics = data.clinics ?? [];
+      if (clinics.length === 0) {
         setStatus("empty");
       } else {
-        setResults(filtered);
+        setResults(clinics);
         setStatus("ok");
       }
-    }, 700);
+    } catch (err) {
+      console.error("[clinics] search failed:", err instanceof Error ? err.message : err);
+      setStatus("error");
+    }
   };
 
   const handleToggle = (placeId: string) => {
