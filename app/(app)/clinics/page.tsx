@@ -9,7 +9,7 @@ import { ClinicSearchBar } from "@/components/clinics/clinic-search-bar";
 import { type LatLng, haversineMeters } from "@/lib/utils/geo";
 import type { ClinicResult } from "@/types/clinic";
 import { List as ListIcon, Map as MapIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Status = "idle" | "loading" | "ok" | "empty" | "error";
 
@@ -25,6 +25,15 @@ export default function ClinicsPage() {
   // distance per result. Held in a ref so handleSearch always reads the
   // freshest value even when invoked from the search-bar's setTimeout(0).
   const userCoordsRef = useRef<LatLng | null>(null);
+
+  // Scroll the matching list card into view whenever the selected pin changes.
+  // block: "nearest" makes this a no-op when the card is already visible,
+  // so it doesn't fight the user when they click a card themselves.
+  useEffect(() => {
+    if (!selectedPlaceId) return;
+    const el = document.getElementById(`clinic-card-${selectedPlaceId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [selectedPlaceId]);
 
   const handleSearch = async () => {
     if (!location.trim()) return;
