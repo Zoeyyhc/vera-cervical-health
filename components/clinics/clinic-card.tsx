@@ -35,8 +35,9 @@ export function ClinicCard({ clinic, isExpanded, isSelected, onToggle }: Props) 
   };
 
   return (
-    // biome-ignore lint/a11y/useSemanticElements: card contains a nested button and link; a real <button> would nest interactive elements (invalid HTML)
     <div
+      id={`clinic-card-${clinic.placeId}`}
+      // biome-ignore lint/a11y/useSemanticElements: card contains a nested button and link; a real <button> would nest interactive elements (invalid HTML)
       role="button"
       tabIndex={0}
       aria-expanded={isExpanded}

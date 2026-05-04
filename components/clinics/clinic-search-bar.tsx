@@ -10,7 +10,9 @@ type Props = {
   onKeywordChange: (v: string) => void;
   onLocationChange: (v: string) => void;
   onSearch: () => void;
-  onUseMyLocation?: () => void;
+  // Fired with the granted browser coordinates so the parent can compute
+  // per-result distances (Haversine) once the search returns.
+  onLocationDetected?: (coords: { lat: number; lng: number }) => void;
   isSearching?: boolean;
 };
 
@@ -22,6 +24,7 @@ export function ClinicSearchBar({
   onKeywordChange,
   onLocationChange,
   onSearch,
+  onLocationDetected,
   isSearching,
 }: Props) {
   const [geoState, setGeoState] = useState<GeoState>("idle");
@@ -49,9 +52,10 @@ export function ClinicSearchBar({
     setGeoState("requesting");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const lat = pos.coords.latitude.toFixed(4);
-        const lng = pos.coords.longitude.toFixed(4);
-        onLocationChange(`${lat},${lng}`);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        onLocationChange(`${lat.toFixed(4)},${lng.toFixed(4)}`);
+        onLocationDetected?.({ lat, lng });
         setGeoState("granted");
         // Trigger search on next tick so parent state has the new location.
         setTimeout(() => onSearch(), 0);

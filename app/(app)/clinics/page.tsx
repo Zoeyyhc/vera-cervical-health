@@ -6,9 +6,10 @@ import { ClinicList } from "@/components/clinics/clinic-list";
 import { ClinicLoadingSkeleton } from "@/components/clinics/clinic-loading-skeleton";
 import { ClinicMap } from "@/components/clinics/clinic-map";
 import { ClinicSearchBar } from "@/components/clinics/clinic-search-bar";
+import { type LatLng, haversineMeters } from "@/lib/utils/geo";
 import type { ClinicResult } from "@/types/clinic";
 import { List as ListIcon, Map as MapIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Status = "idle" | "loading" | "ok" | "empty" | "error";
 
@@ -20,6 +21,19 @@ export default function ClinicsPage() {
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<"list" | "map">("list");
+  // Coords from a granted Geolocation permission. Used to compute Haversine
+  // distance per result. Held in a ref so handleSearch always reads the
+  // freshest value even when invoked from the search-bar's setTimeout(0).
+  const userCoordsRef = useRef<LatLng | null>(null);
+
+  // Scroll the matching list card into view whenever the selected pin changes.
+  // block: "nearest" makes this a no-op when the card is already visible,
+  // so it doesn't fight the user when they click a card themselves.
+  useEffect(() => {
+    if (!selectedPlaceId) return;
+    const el = document.getElementById(`clinic-card-${selectedPlaceId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [selectedPlaceId]);
 
   const handleSearch = async () => {
     if (!location.trim()) return;
@@ -36,7 +50,15 @@ export default function ClinicsPage() {
         return;
       }
       const data = (await res.json()) as { clinics?: ClinicResult[] };
-      const clinics = data.clinics ?? [];
+      const raw = data.clinics ?? [];
+      const userCoords = userCoordsRef.current;
+      const clinics: ClinicResult[] = userCoords
+        ? raw.map((c) =>
+            c.distanceMeters != null
+              ? c
+              : { ...c, distanceMeters: Math.round(haversineMeters(userCoords, c.location)) }
+          )
+        : raw;
       if (clinics.length === 0) {
         setStatus("empty");
       } else {
@@ -47,6 +69,10 @@ export default function ClinicsPage() {
       console.error("[clinics] search failed:", err instanceof Error ? err.message : err);
       setStatus("error");
     }
+  };
+
+  const handleLocationDetected = (coords: LatLng) => {
+    userCoordsRef.current = coords;
   };
 
   const handleToggle = (placeId: string) => {
@@ -132,6 +158,7 @@ export default function ClinicsPage() {
                 onKeywordChange={setKeyword}
                 onLocationChange={setLocation}
                 onSearch={handleSearch}
+                onLocationDetected={handleLocationDetected}
                 isSearching={status === "loading"}
               />
             </div>
