@@ -94,3 +94,32 @@
     @apply py-16 md:py-24;
   }
 }
+
+@layer utilities {
+  .map-dot-grid {
+    background-color: #eceae4;
+    background-image: radial-gradient(circle at 1px 1px, rgba(28, 28, 28, 0.1) 1px, transparent 0);
+    background-size: 20px 20px;
+  }
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+    --tw-ring-color: rgba(59, 130, 246, 0.5);
+  }
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(28, 28, 28, 0.04), transparent);
+    transform: translateX(-100%);
+    animation: shimmer 1.6s infinite;
+  }
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+}
