@@ -1,6 +1,7 @@
 // app/(auth)/login/login-form.tsx
 "use client";
 
+import { GoogleIcon } from "@/components/icons/google";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -17,18 +18,21 @@ import { type LoginFormValues, loginSchema } from "@/lib/validations/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [googleLoading, setGoogleLoading] = useState(false);
   useEffect(() => {
     if (searchParams.get("reset") === "success") {
       toast.success("Password updated — sign in below");
     } else if (searchParams.get("error") === "link-expired") {
       toast.error("Reset link has expired — request a new one");
+    } else if (searchParams.get("error") === "oauth-failed") {
+      toast.error("Google sign-in failed — try again");
     }
   }, [searchParams]);
 
@@ -47,6 +51,19 @@ export function LoginForm() {
     router.push("/chat");
   }
 
+  async function onGoogleSignIn() {
+    setGoogleLoading(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/api/auth/callback?next=/chat` },
+    });
+    if (error) {
+      toast.error(error.message);
+      setGoogleLoading(false);
+    }
+  }
+
   return (
     <div>
       <p className="text-[11px] uppercase tracking-[0.08em] text-muted-gray mb-3">Cervix Health</p>
@@ -54,6 +71,28 @@ export function LoginForm() {
         Welcome back
       </h1>
       <p className="text-sm text-muted-gray mb-8">Sign in to your account</p>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={onGoogleSignIn}
+        disabled={googleLoading || form.formState.isSubmitting}
+      >
+        <GoogleIcon className="mr-2 h-4 w-4" />
+        {googleLoading ? "Redirecting..." : "Continue with Google"}
+      </Button>
+
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center">
+          <span className="bg-cream px-3 text-[11px] uppercase tracking-[0.08em] text-muted-gray">
+            or
+          </span>
+        </div>
+      </div>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

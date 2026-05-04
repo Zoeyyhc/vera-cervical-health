@@ -1,6 +1,7 @@
 // app/(auth)/register/register-form.tsx
 "use client";
 
+import { GoogleIcon } from "@/components/icons/google";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -22,6 +23,7 @@ import { toast } from "sonner";
 
 export function RegisterForm() {
   const [emailSent, setEmailSent] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -39,6 +41,19 @@ export function RegisterForm() {
       return;
     }
     setEmailSent(true);
+  }
+
+  async function onGoogleSignIn() {
+    setGoogleLoading(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/api/auth/callback?next=/chat` },
+    });
+    if (error) {
+      toast.error(error.message);
+      setGoogleLoading(false);
+    }
   }
 
   if (emailSent) {
@@ -70,6 +85,28 @@ export function RegisterForm() {
         Create account
       </h1>
       <p className="text-sm text-muted-gray mb-8">Start your health journey</p>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={onGoogleSignIn}
+        disabled={googleLoading || form.formState.isSubmitting}
+      >
+        <GoogleIcon className="mr-2 h-4 w-4" />
+        {googleLoading ? "Redirecting..." : "Continue with Google"}
+      </Button>
+
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center">
+          <span className="bg-cream px-3 text-[11px] uppercase tracking-[0.08em] text-muted-gray">
+            or
+          </span>
+        </div>
+      </div>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
