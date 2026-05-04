@@ -36,9 +36,9 @@ describe("ClinicsPage", () => {
       expect(screen.queryAllByRole("heading", { level: 3 })).toHaveLength(0);
     });
 
-    it("renders the map preview placeholder caption", () => {
+    it("renders the map section", () => {
       render(<ClinicsPage />);
-      expect(screen.getByText(/map preview/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/map preview/i)).toBeInTheDocument();
     });
   });
 
