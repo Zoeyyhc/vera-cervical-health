@@ -151,7 +151,8 @@ export default function ClinicsPage() {
             className={`${mobileView === "map" ? "hidden" : "block"} lg:block`}
             aria-label="Clinic results"
           >
-            <div className="sticky top-0 z-10 bg-background">
+            {/* top-16 = below the 64px AppNav so the search bar docks under it */}
+            <div className="sticky top-16 z-10 bg-background">
               <ClinicSearchBar
                 keyword={keyword}
                 location={location}
@@ -169,7 +170,8 @@ export default function ClinicsPage() {
             className={`${mobileView === "list" ? "hidden" : "block"} lg:block`}
             aria-label="Map preview"
           >
-            <div className="sticky top-0 h-screen p-4 sm:p-6">
+            {/* top-16 / 4rem aligns under the AppNav; calc subtracts nav height */}
+            <div className="sticky top-16 h-[calc(100vh-4rem)] p-4 sm:p-6">
               <ClinicMap
                 results={results}
                 selectedPlaceId={selectedPlaceId}
