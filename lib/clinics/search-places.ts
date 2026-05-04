@@ -46,11 +46,20 @@ type UpstreamPlace = {
 
 type UpstreamResponse = { places?: UpstreamPlace[] };
 
+// Anchors every search to medical results in the user's location. Without this,
+// Google Places returns admin areas (postcodes, suburbs) and unrelated matches
+// like "Papa Rich" for a "pap" keyword. The "in <location>" framing tells Google
+// to treat <location> as a place filter rather than a name match.
+const HEALTH_QUALIFIER = "women's health clinic";
+
 export async function searchPlacesApi({
   location,
   keyword,
 }: SearchPlacesInput): Promise<SearchPlacesResult> {
-  const textQuery = keyword?.trim() ? `${keyword.trim()} ${location}` : location;
+  const trimmedKeyword = keyword?.trim();
+  const textQuery = trimmedKeyword
+    ? `${trimmedKeyword} ${HEALTH_QUALIFIER} in ${location}`
+    : `${HEALTH_QUALIFIER} in ${location}`;
 
   let upstream: Response;
   try {

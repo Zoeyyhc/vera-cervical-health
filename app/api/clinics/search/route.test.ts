@@ -49,7 +49,9 @@ describe("GET /api/clinics/search", () => {
     );
     await GET(makeRequest("/api/clinics/search?location=Sydney&keyword=cervical%20screening"));
     expect(captured.body).not.toBeNull();
-    expect(captured.body?.textQuery).toBe("cervical screening Sydney");
+    expect(captured.body?.textQuery).toBe(
+      "cervical screening women's health clinic in Sydney"
+    );
   });
 
   it("uses location only when no keyword provided", async () => {
@@ -61,7 +63,7 @@ describe("GET /api/clinics/search", () => {
       })
     );
     await GET(makeRequest("/api/clinics/search?location=Sydney"));
-    expect(captured.body?.textQuery).toBe("Sydney");
+    expect(captured.body?.textQuery).toBe("women's health clinic in Sydney");
   });
 
   it("sends X-Goog-Api-Key and X-Goog-FieldMask headers", async () => {
