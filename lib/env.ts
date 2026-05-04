@@ -37,4 +37,10 @@ export const env = {
 
   // SerpAPI — proxied through /api/events, never exposed to the browser
   serpapiKey: requireEnv("SERPAPI_KEY"),
+
+  // Google Maps / Places — same key powers the browser map (EPIC5-06) and the
+  // server-side Places API (New) Text Search call from /api/clinics/search.
+  // NEXT_PUBLIC_ because the Maps JS SDK reads it in the browser; on the server
+  // we just read the same value via process.env.
+  googleMapsApiKey: requireEnv("NEXT_PUBLIC_GOOGLE_MAPS_KEY"),
 } as const;
