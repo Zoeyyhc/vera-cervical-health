@@ -52,14 +52,44 @@ type UpstreamResponse = { places?: UpstreamPlace[] };
 // to treat <location> as a place filter rather than a name match.
 const HEALTH_QUALIFIER = "women's health clinic";
 
+// Geolocation gives us "lat,lng" strings. searchText doesn't parse coords from
+// text — without locationBias it falls back to a global default and returns
+// US clinics for a Melbourne user. 50km matches the Places API maximum circle.
+const COORD_PATTERN = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
+const LOCATION_BIAS_RADIUS_M = 50000;
+
+type PlacesRequestBody = {
+  textQuery: string;
+  locationBias?: {
+    circle: { center: { latitude: number; longitude: number }; radius: number };
+  };
+};
+
 export async function searchPlacesApi({
   location,
   keyword,
 }: SearchPlacesInput): Promise<SearchPlacesResult> {
   const trimmedKeyword = keyword?.trim();
-  const textQuery = trimmedKeyword
-    ? `${trimmedKeyword} ${HEALTH_QUALIFIER} in ${location}`
-    : `${HEALTH_QUALIFIER} in ${location}`;
+  const coordMatch = location.match(COORD_PATTERN);
+
+  const body: PlacesRequestBody = coordMatch
+    ? {
+        textQuery: trimmedKeyword ? `${trimmedKeyword} ${HEALTH_QUALIFIER}` : HEALTH_QUALIFIER,
+        locationBias: {
+          circle: {
+            center: {
+              latitude: Number.parseFloat(coordMatch[1]),
+              longitude: Number.parseFloat(coordMatch[2]),
+            },
+            radius: LOCATION_BIAS_RADIUS_M,
+          },
+        },
+      }
+    : {
+        textQuery: trimmedKeyword
+          ? `${trimmedKeyword} ${HEALTH_QUALIFIER} in ${location}`
+          : `${HEALTH_QUALIFIER} in ${location}`,
+      };
 
   let upstream: Response;
   try {
@@ -70,7 +100,7 @@ export async function searchPlacesApi({
         "X-Goog-Api-Key": env.googleMapsApiKey,
         "X-Goog-FieldMask": FIELD_MASK,
       },
-      body: JSON.stringify({ textQuery }),
+      body: JSON.stringify(body),
     });
   } catch (err) {
     console.error("[clinics] places fetch failed:", err instanceof Error ? err.message : err);

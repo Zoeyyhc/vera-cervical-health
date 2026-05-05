@@ -64,6 +64,51 @@ describe("GET /api/clinics/search", () => {
     expect(captured.body?.textQuery).toBe("women's health clinic in Sydney");
   });
 
+  it("sends lat,lng location as locationBias.circle, not textQuery", async () => {
+    type CapturedBody = {
+      textQuery?: string;
+      locationBias?: {
+        circle?: { center?: { latitude?: number; longitude?: number }; radius?: number };
+      };
+    };
+    const captured: { body: CapturedBody | null } = { body: null };
+    server.use(
+      http.post(PLACES_URL, async ({ request }) => {
+        captured.body = (await request.json()) as CapturedBody;
+        return HttpResponse.json({ places: [] });
+      })
+    );
+    await GET(makeRequest("/api/clinics/search?location=-37.8499,145.1343"));
+    expect(captured.body?.textQuery).toBe("women's health clinic");
+    expect(captured.body?.locationBias?.circle?.center).toEqual({
+      latitude: -37.8499,
+      longitude: 145.1343,
+    });
+    expect(captured.body?.locationBias?.circle?.radius).toBeGreaterThan(0);
+  });
+
+  it("combines keyword with locationBias when location is coordinates", async () => {
+    type CapturedBody = {
+      textQuery?: string;
+      locationBias?: { circle?: { center?: { latitude?: number; longitude?: number } } };
+    };
+    const captured: { body: CapturedBody | null } = { body: null };
+    server.use(
+      http.post(PLACES_URL, async ({ request }) => {
+        captured.body = (await request.json()) as CapturedBody;
+        return HttpResponse.json({ places: [] });
+      })
+    );
+    await GET(
+      makeRequest("/api/clinics/search?location=-37.8499,145.1343&keyword=cervical%20screening")
+    );
+    expect(captured.body?.textQuery).toBe("cervical screening women's health clinic");
+    expect(captured.body?.locationBias?.circle?.center).toEqual({
+      latitude: -37.8499,
+      longitude: 145.1343,
+    });
+  });
+
   it("sends X-Goog-Api-Key and X-Goog-FieldMask headers", async () => {
     const captured: { headers: Headers | null } = { headers: null };
     server.use(
