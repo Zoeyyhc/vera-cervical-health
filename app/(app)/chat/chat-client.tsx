@@ -50,6 +50,14 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
     setInput("");
     setIsStreaming(true);
 
+    // Capture before any state mutation: a "new" send is one where no session
+    // existed yet. Only this case needs router.refresh() at done — the sidebar
+    // has to learn about the freshly created row. Follow-up messages on an
+    // existing session bump updated_at on the server, but we accept a slightly
+    // stale sidebar order until the next full nav rather than re-running the
+    // sessions query (which previously fired on every single message).
+    const wasNewSession = sessionId === null;
+
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -100,9 +108,11 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, status: "complete" } : m))
           );
-          // Re-fetch the layout's session list so the sidebar reflects this
-          // new session (or the bumped updated_at on an existing one).
-          router.refresh();
+          // Only refresh on the first turn of a brand-new session so the
+          // sidebar picks up the new row. For follow-up turns the sidebar
+          // entry already exists; skipping the refresh avoids re-running the
+          // sessions query (and re-rendering the layout) on every message.
+          if (wasNewSession) router.refresh();
         } else {
           // event.type === "error" — server-side stream error. The route
           // already persisted the partial with a marker; just notify the user.

@@ -35,10 +35,16 @@ export type SessionListItem = {
 };
 
 /**
- * Loads the current user's chat sessions for the sidebar, joined with each
- * session's chat_messages (so we can derive the title fallback). RLS scopes
- * the query to the caller — passing a Supabase client signed in as user A
- * cannot return user B's sessions.
+ * Loads the current user's chat sessions for the sidebar, with each session's
+ * earliest user message embedded for the title fallback. RLS scopes the query
+ * to the caller — passing a Supabase client signed in as user A cannot return
+ * user B's sessions.
+ *
+ * The embedded chat_messages is filtered (role=user), ordered (created_at asc)
+ * and limited to 1 per parent. PostgREST translates this into a LATERAL join
+ * so each session row carries at most one message, regardless of conversation
+ * length. This avoids the prior payload blow-up where every session pulled its
+ * full message history just to derive a title.
  *
  * Returns a sidebar-ready shape: id, derived display title, ISO timestamp.
  */
@@ -47,20 +53,17 @@ export async function loadSessionsForUser(
 ): Promise<SessionListItem[]> {
   const { data, error } = await supabase
     .from("chat_sessions")
-    .select("id, title, updated_at, chat_messages ( content, role, created_at )")
+    .select("id, title, updated_at, chat_messages(content)")
+    .eq("chat_messages.role", "user")
+    .order("created_at", { referencedTable: "chat_messages", ascending: true })
+    .limit(1, { referencedTable: "chat_messages" })
     .order("updated_at", { ascending: false });
 
   if (error) throw new Error(error.message);
   if (!data) return [];
 
   return data.map((row) => {
-    // Find the earliest user message in the nested join. The generated types
-    // treat created_at as nullable; in practice it's set by the column default,
-    // but coerce defensively so localeCompare doesn't get null.
-    const userMessages = (row.chat_messages ?? [])
-      .filter((m) => m.role === "user")
-      .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
-    const firstUserMessage = userMessages[0]?.content ?? null;
+    const firstUserMessage = (row.chat_messages ?? [])[0]?.content ?? null;
 
     return {
       id: row.id,

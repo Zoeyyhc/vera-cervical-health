@@ -52,45 +52,65 @@ describe("deriveSessionTitle", () => {
 import { vi } from "vitest";
 import { type SessionListItem, loadSessionsForUser } from "./sessions";
 
+/**
+ * Mocks the chained query builder used by loadSessionsForUser. The chain is
+ *   from(...).select(...).eq(...).order(...).order(...).limit(...)
+ * with the embedded chat_messages already pre-filtered/ordered/limited by
+ * PostgREST, so each row arrives with at most one user message.
+ *
+ * Returns spies for every link so tests can assert exactly which arguments
+ * were passed at each step.
+ */
 function mockSupabaseSessionsQuery(
   rows: Array<{
     id: string;
     title: string | null;
     updated_at: string;
-    chat_messages: Array<{ content: string; role: string; created_at: string }>;
+    chat_messages: Array<{ content: string }>;
   }> | null,
   error: Error | null = null
 ) {
-  const order = vi.fn().mockResolvedValue({ data: rows, error });
-  const select = vi.fn().mockReturnValue({ order });
+  // Chain shape: from → select → eq → order(embedded) → limit → order(parent) → awaits
+  const orderUpdated = vi.fn().mockResolvedValue({ data: rows, error });
+  const limit = vi.fn().mockReturnValue({ order: orderUpdated });
+  const orderEmbedded = vi.fn().mockReturnValue({ limit });
+  const eq = vi.fn().mockReturnValue({ order: orderEmbedded });
+  const select = vi.fn().mockReturnValue({ eq });
   const from = vi.fn().mockReturnValue({ select });
   const supabase = { from } as unknown as Parameters<typeof loadSessionsForUser>[0];
-  return { supabase, from, select, order };
+  return { supabase, from, select, eq, orderEmbedded, orderUpdated, limit };
 }
 
 describe("loadSessionsForUser", () => {
-  it("queries chat_sessions with nested chat_messages, ordered by updated_at desc", async () => {
-    const { supabase, from, select, order } = mockSupabaseSessionsQuery([]);
+  it("issues a single query that filters embedded chat_messages to role=user, ordered ascending and limited to 1 per session", async () => {
+    const { supabase, from, select, eq, orderEmbedded, orderUpdated, limit } =
+      mockSupabaseSessionsQuery([]);
 
     await loadSessionsForUser(supabase);
 
     expect(from).toHaveBeenCalledWith("chat_sessions");
+    // Only the parent columns plus the bare embedded content — the embedded
+    // resource is shaped by the per-resource filter/order/limit modifiers,
+    // not by the select string.
     expect(select).toHaveBeenCalledWith(
-      expect.stringMatching(/id,\s*title,\s*updated_at,\s*chat_messages\s*\(/)
+      expect.stringMatching(/id,\s*title,\s*updated_at,\s*chat_messages\s*\(\s*content\s*\)/)
     );
-    expect(order).toHaveBeenCalledWith("updated_at", { ascending: false });
+    expect(eq).toHaveBeenCalledWith("chat_messages.role", "user");
+    expect(orderEmbedded).toHaveBeenCalledWith(
+      "created_at",
+      expect.objectContaining({ referencedTable: "chat_messages", ascending: true })
+    );
+    expect(limit).toHaveBeenCalledWith(1, { referencedTable: "chat_messages" });
+    expect(orderUpdated).toHaveBeenCalledWith("updated_at", { ascending: false });
   });
 
-  it("derives the display title from the first user message when title is null", async () => {
+  it("derives the display title from the (single) embedded user message when title is null", async () => {
     const { supabase } = mockSupabaseSessionsQuery([
       {
         id: "s1",
         title: null,
         updated_at: "2026-05-01T10:00:00Z",
-        chat_messages: [
-          { content: "Hello", role: "user", created_at: "2026-05-01T09:00:00Z" },
-          { content: "Hi there!", role: "assistant", created_at: "2026-05-01T09:00:01Z" },
-        ],
+        chat_messages: [{ content: "Hello" }],
       },
     ]);
 
@@ -110,14 +130,14 @@ describe("loadSessionsForUser", () => {
         id: "s1",
         title: "My pinned chat",
         updated_at: "2026-05-01T10:00:00Z",
-        chat_messages: [{ content: "ignored", role: "user", created_at: "2026-05-01T09:00:00Z" }],
+        chat_messages: [{ content: "ignored" }],
       },
     ]);
     const result = await loadSessionsForUser(supabase);
     expect(result[0].displayTitle).toBe("My pinned chat");
   });
 
-  it("uses the placeholder when there are no messages and no title", async () => {
+  it("uses the placeholder when the embedded message array is empty and title is null", async () => {
     const { supabase } = mockSupabaseSessionsQuery([
       {
         id: "s1",
@@ -128,30 +148,6 @@ describe("loadSessionsForUser", () => {
     ]);
     const result = await loadSessionsForUser(supabase);
     expect(result[0].displayTitle).toBe("(new conversation)");
-  });
-
-  it("ignores assistant messages when picking the first message", async () => {
-    const { supabase } = mockSupabaseSessionsQuery([
-      {
-        id: "s1",
-        title: null,
-        updated_at: "2026-05-01T10:00:00Z",
-        chat_messages: [
-          {
-            content: "should be skipped",
-            role: "assistant",
-            created_at: "2026-05-01T09:00:00Z",
-          },
-          {
-            content: "the real first user msg",
-            role: "user",
-            created_at: "2026-05-01T09:00:01Z",
-          },
-        ],
-      },
-    ]);
-    const result = await loadSessionsForUser(supabase);
-    expect(result[0].displayTitle).toBe("the real first user msg");
   });
 
   it("returns an empty array when the user has no sessions", async () => {
