@@ -123,3 +123,226 @@
     }
   }
 }
+
+/* /learn page tokens and utility classes (Lovable-derived). Coexists with cervix typography above. */
+:root {
+  /* --color-* aliases consumed by inline styles in /learn components */
+  --color-foreground: #1c1c1c;
+  --color-background: #f7f4ed;
+  --color-border: #eceae4;
+  --color-muted-foreground: #5f5f5d;
+  /* Whisper accent palette for /learn watercolor washes */
+  --color-rose: #e9d5ce;
+  --color-sage: #cdd6c1;
+  --color-terracotta: #d8b4a0;
+}
+
+@layer components {
+  /* Typography (alongside cervix existing typography for landing) */
+  .display-section {
+    font-size: 48px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -1.2px;
+  }
+  .display-sub {
+    font-size: 36px;
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.9px;
+  }
+  .h-article-2 {
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.5px;
+  }
+  .h-article-3 {
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.3px;
+  }
+  .body-lg {
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 1.55;
+  }
+  .body-md {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.65;
+  }
+  @media (max-width: 768px) {
+    .display-section {
+      font-size: 34px;
+      letter-spacing: -0.8px;
+    }
+    .display-sub {
+      font-size: 28px;
+      letter-spacing: -0.6px;
+    }
+  }
+
+  /* Buttons */
+  .btn-primary {
+    background: var(--color-foreground);
+    color: var(--primary-foreground);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 400;
+    box-shadow:
+      rgba(255, 255, 255, 0.2) 0px 0.5px 0px 0px inset,
+      rgba(0, 0, 0, 0.2) 0px 0px 0px 0.5px inset,
+      rgba(0, 0, 0, 0.05) 0px 1px 2px 0px;
+    transition: opacity 150ms ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-primary:hover {
+    opacity: 0.85;
+  }
+  .btn-primary:active {
+    opacity: 0.8;
+  }
+  .btn-primary:focus-visible {
+    outline: none;
+    box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-foreground);
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid rgba(28, 28, 28, 0.4);
+    transition: opacity 150ms ease, background 150ms ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-ghost:hover {
+    background: rgba(28, 28, 28, 0.04);
+  }
+  .btn-ghost:active {
+    opacity: 0.8;
+  }
+  .btn-ghost:focus-visible {
+    outline: none;
+    box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px;
+  }
+
+  .btn-pill {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    padding: 10px 18px;
+    border-radius: 9999px;
+    box-shadow:
+      rgba(255, 255, 255, 0.2) 0px 0.5px 0px 0px inset,
+      rgba(0, 0, 0, 0.2) 0px 0px 0px 0.5px inset,
+      rgba(0, 0, 0, 0.05) 0px 1px 2px 0px;
+    transition: opacity 150ms ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .btn-pill:hover {
+    opacity: 0.95;
+  }
+  .btn-pill:focus-visible {
+    outline: none;
+    box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px;
+  }
+
+  /* Cards and inputs */
+  .surface-card {
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+  }
+  .surface-card.hoverable:hover {
+    background: rgba(28, 28, 28, 0.04);
+  }
+
+  .input-cream {
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    /* longhand padding so utility classes like `pl-10` (icon-prefixed inputs) can override left side cleanly */
+    padding-top: 8px;
+    padding-right: 14px;
+    padding-bottom: 8px;
+    padding-left: 14px;
+    color: var(--color-foreground);
+    height: 40px;
+  }
+  .input-cream::placeholder {
+    color: var(--color-muted-foreground);
+  }
+  .input-cream:focus {
+    outline: 2px solid rgba(59, 130, 246, 0.5);
+    outline-offset: 1px;
+  }
+
+  /* Quotes */
+  .quote-block {
+    border-left: 2px solid color-mix(in oklab, var(--color-sage) 60%, transparent);
+    padding: 8px 0 8px 16px;
+    font-style: italic;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  .quote-attr {
+    padding-left: 16px;
+  }
+
+  /* Active nav link underline */
+  .nav-link-active::after {
+    content: "";
+    display: block;
+    height: 1.5px;
+    background: var(--color-foreground);
+    margin-top: 4px;
+  }
+
+  /* Watercolor washes */
+  .wash-rose {
+    background: radial-gradient(
+      ellipse at center,
+      color-mix(in oklab, var(--color-rose) 28%, transparent),
+      transparent 70%
+    );
+  }
+  .wash-sage {
+    background: radial-gradient(
+      ellipse at center,
+      color-mix(in oklab, var(--color-sage) 28%, transparent),
+      transparent 70%
+    );
+  }
+  .wash-terracotta {
+    background: radial-gradient(
+      ellipse at center,
+      color-mix(in oklab, var(--color-terracotta) 26%, transparent),
+      transparent 70%
+    );
+  }
+}
+
+/* Card grid fade-in on scroll (used by myths-debunked) */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-up {
+  animation: fadeUp 400ms ease-out both;
+}

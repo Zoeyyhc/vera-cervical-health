@@ -1,4 +1,5 @@
-export const PROTECTED_PATHS = ["/chat", "/clinics", "/learn", "/profile", "/admin"] as const;
+// /learn is intentionally public per CLAUDE.md ("Guest UX ... public learn pages").
+export const PROTECTED_PATHS = ["/chat", "/clinics", "/profile", "/admin"] as const;
 
 export const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"] as const;
 
