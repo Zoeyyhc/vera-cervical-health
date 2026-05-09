@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Article, StandardSection } from "@/lib/learn/articles";
 import { ArticleHeader } from "./article-header";
 import { RightRail, MobileCTABar } from "./right-rail";
@@ -13,6 +15,27 @@ function slugify(s: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+// Inline-only markdown renderer. Strips the default <p> wrapper so the
+// rendered output composes inside the surrounding <p>/<li>. Supports
+// **bold**, *italic*, and [text](href).
+function Md({ children }: { children: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children: c }) => <>{c}</>,
+        a: ({ href, children: c }) => (
+          <a href={href} className="underline underline-offset-2">
+            {c}
+          </a>
+        ),
+      }}
+    >
+      {children}
+    </ReactMarkdown>
+  );
 }
 
 export function StandardArticle({
@@ -101,7 +124,7 @@ export function StandardArticle({
               if (s.type === "p") {
                 return (
                   <p key={i} className="mt-5 first:mt-0">
-                    {s.text}
+                    <Md>{s.text}</Md>
                   </p>
                 );
               }
@@ -130,9 +153,22 @@ export function StandardArticle({
                 return (
                   <ul key={i} className="mt-4 space-y-2 list-disc pl-6">
                     {s.items.map((it, j) => (
-                      <li key={j}>{it}</li>
+                      <li key={j}>
+                        <Md>{it}</Md>
+                      </li>
                     ))}
                   </ul>
+                );
+              }
+              if (s.type === "ol") {
+                return (
+                  <ol key={i} className="mt-4 space-y-2 list-decimal pl-6">
+                    {s.items.map((it, j) => (
+                      <li key={j}>
+                        <Md>{it}</Md>
+                      </li>
+                    ))}
+                  </ol>
                 );
               }
               if (s.type === "cta") {

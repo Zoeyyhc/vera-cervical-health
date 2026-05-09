@@ -1,45 +1,15 @@
 import { LandingButton } from "@/components/landing/landing-button";
 import { Dots, Leaf } from "@/components/landing/leaf";
+import { articles } from "@/lib/learn/articles";
 import Link from "next/link";
 
-const topics = [
-  {
-    category: "Screening",
-    title: "What actually happens during a cervical screening test",
-    excerpt: "A 5-minute walk-through of the appointment, from check-in to results.",
-    href: "/learn/screening-appointment",
-  },
-  {
-    category: "HPV",
-    title: "HPV, explained without the panic",
-    excerpt: "Why it's common, how it usually clears on its own, and when it doesn't.",
-    href: "/learn/hpv",
-  },
-  {
-    category: "Results",
-    title: "Reading your results letter line by line",
-    excerpt: "Decoding the language so you know what each phrase actually means.",
-    href: "/learn/results",
-  },
-  {
-    category: "Vaccines",
-    title: "The HPV vaccine: who, when, and why",
-    excerpt: "Eligibility, timing, and what the evidence says about protection.",
-    href: "/learn/vaccines",
-  },
-  {
-    category: "Anatomy basics",
-    title: "A gentle map of the cervix and surrounding tissue",
-    excerpt: "The vocabulary your doctor uses, drawn out in plain language.",
-    href: "/learn/anatomy",
-  },
-  {
-    category: "Talking to your doctor",
-    title: "Questions to bring to your next appointment",
-    excerpt: "A short list to make the visit feel less rushed and more useful.",
-    href: "/learn/doctor-questions",
-  },
-];
+// Pull straight from /learn so titles, excerpts, categories, and slugs stay in sync.
+const topics = articles.slice(0, 6).map((a) => ({
+  category: a.category,
+  title: a.title,
+  excerpt: a.excerpt,
+  href: `/learn/${a.slug}`,
+}));
 
 export function FeaturedTopics() {
   return (

@@ -1,21 +1,24 @@
 import { Leaf } from "@/components/landing/leaf";
+import { getArticle } from "@/lib/learn/articles";
 import Link from "next/link";
 
+// Three handpicked entry points into /learn, framed for first-time visitors.
+// Titles and bodies are landing-voice; slugs link to real articles.
 const items = [
   {
     title: "Understanding HPV",
-    body: "What it is, how common it is, and what it means for you — without the panic.",
-    href: "/learn/hpv",
+    body: "What it is, how common it is, and what it means for you - without the panic.",
+    href: `/learn/${getArticle("what-is-hpv")?.slug ?? "what-is-hpv"}`,
   },
   {
     title: "What is cervical screening?",
     body: "A plain-language walk-through of the test, the timeline, and what to expect.",
-    href: "/learn/screening",
+    href: `/learn/${getArticle("screening-test-overview")?.slug ?? "screening-test-overview"}`,
   },
   {
     title: "After an abnormal result",
-    body: "What follow-up looks like, what your options are, and questions to ask.",
-    href: "/learn/abnormal-result",
+    body: "Decoding each result category and what comes next - including colposcopy.",
+    href: `/learn/${getArticle("understanding-results")?.slug ?? "understanding-results"}`,
   },
 ];
 
