@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { CardGridArticle } from "@/components/learn/card-grid-article";
+import { ScrollytellingArticle } from "@/components/learn/scrollytelling-article";
 import { SiteFooter } from "@/components/learn/site-footer";
 import { StandardArticle } from "@/components/learn/standard-article";
-import { ScrollytellingArticle } from "@/components/learn/scrollytelling-article";
-import { CardGridArticle } from "@/components/learn/card-grid-article";
 import { articles, getArticle, standardBodies } from "@/lib/learn/articles";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 export function generateStaticParams() {
   return articles.map((a) => ({ slug: a.slug }));

@@ -115,7 +115,10 @@ export const standardBodies: Record<string, StandardSection[]> = {
       type: "p",
       text: "HPV stands for **Human Papillomavirus**. It's not one virus but a family of more than 200 related viruses. Some cause harmless warts on hands or feet. Some cause genital warts. A small group can cause cancer, including cervical cancer, if they don't clear from your body over many years.",
     },
-    { type: "p", text: "HPV spreads through intimate skin-to-skin contact. The CDC notes you can catch it:" },
+    {
+      type: "p",
+      text: "HPV spreads through intimate skin-to-skin contact. The CDC notes you can catch it:",
+    },
     {
       type: "quote",
       text: "by having vaginal, anal, or oral sex with someone who has the virus, even if they don't have signs or symptoms.",
@@ -207,7 +210,11 @@ export const standardBodies: Record<string, StandardSection[]> = {
       type: "p",
       text: "HPV is common, usually clears on its own, and rarely causes cancer - but the small share that does is exactly why we vaccinate and screen. Now you know what HPV actually is. The next time you read about it, you have context.",
     },
-    { type: "cta", text: "Have a personal question about HPV? Ask the AI", href: "/chat?q=What+is+HPV" },
+    {
+      type: "cta",
+      text: "Have a personal question about HPV? Ask the AI",
+      href: "/chat?q=What+is+HPV",
+    },
   ],
 
   "hpv-vs-cervical-cancer": [
@@ -273,7 +280,10 @@ export const standardBodies: Record<string, StandardSection[]> = {
     },
     { type: "h2", text: "Why this timeline matters" },
     { type: "p", text: "The 15-to-20-year window is the entire reason cervical screening works." },
-    { type: "p", text: "Cervical screening doesn't catch HPV the day you're infected. It catches:" },
+    {
+      type: "p",
+      text: "Cervical screening doesn't catch HPV the day you're infected. It catches:",
+    },
     {
       type: "ul",
       items: [
@@ -291,7 +301,10 @@ export const standardBodies: Record<string, StandardSection[]> = {
       type: "p",
       text: "Read this twice if you need to: **almost all cervical cancers come from HPV, but almost no HPV becomes cervical cancer.**",
     },
-    { type: "p", text: "The first half is the public-health fact that drives vaccination and screening programs. The WHO puts it plainly:" },
+    {
+      type: "p",
+      text: "The first half is the public-health fact that drives vaccination and screening programs. The WHO puts it plainly:",
+    },
     {
       type: "quote",
       text: "Almost all cervical cancer cases result from infection with oncogenic types of HPV.",
@@ -338,7 +351,10 @@ export const standardBodies: Record<string, StandardSection[]> = {
       text: "The change makes sense once you know what causes cervical cancer. Almost all cases come from a long-term infection with high-risk HPV. The Pap test looked for the cell changes the virus eventually causes; the HPV test looks for the virus itself, catching trouble years earlier.",
     },
     { type: "h2", text: "Are you eligible?" },
-    { type: "p", text: "You're eligible for cervical screening in Australia if **all** of the following are true:" },
+    {
+      type: "p",
+      text: "You're eligible for cervical screening in Australia if **all** of the following are true:",
+    },
     {
       type: "ul",
       items: [
@@ -492,7 +508,10 @@ export const standardBodies: Record<string, StandardSection[]> = {
       source: "NHS",
     },
     { type: "h2", text: "Important: HPV detected does not mean cancer" },
-    { type: "p", text: "A common reaction to 'HPV detected' is fear and self-blame. Both are misplaced." },
+    {
+      type: "p",
+      text: "A common reaction to 'HPV detected' is fear and self-blame. Both are misplaced.",
+    },
     {
       type: "ul",
       items: [
@@ -524,7 +543,11 @@ export const standardBodies: Record<string, StandardSection[]> = {
       type: "p",
       text: "If anything in your result confuses you, your GP can walk you through it. Self-collection results can also be discussed with your healthcare provider.",
     },
-    { type: "cta", text: "Have a personal question about your result? Ask the AI", href: "/chat?q=Understanding+results" },
+    {
+      type: "cta",
+      text: "Have a personal question about your result? Ask the AI",
+      href: "/chat?q=Understanding+results",
+    },
   ],
 
   "hpv-vaccine": [
@@ -533,7 +556,10 @@ export const standardBodies: Record<string, StandardSection[]> = {
       text: "The HPV vaccine is the closest thing modern medicine has to a cancer vaccine. It doesn't treat cancer; it prevents the infection that causes the great majority of cervical cancer (and several other cancers as well). This article walks through what the vaccine is, who Australia funds it for, and whether you should consider it as an adult.",
     },
     { type: "h2", text: "What's in the vaccine" },
-    { type: "p", text: "The vaccine used in Australia and most other developed countries is **Gardasil 9**." },
+    {
+      type: "p",
+      text: "The vaccine used in Australia and most other developed countries is **Gardasil 9**.",
+    },
     {
       type: "p",
       text: "It protects against nine HPV types - 6, 11, 16, 18, 31, 33, 45, 52, and 58. Cancer Council Australia notes these nine types are responsible for **approximately 90% of cervical cancers**.",
@@ -611,7 +637,10 @@ export const standardBodies: Record<string, StandardSection[]> = {
       source: "Cancer Council Australia",
     },
     { type: "h2", text: "I had the vaccine. Do I still need screening?" },
-    { type: "p", text: "**Yes.** This is the single most important thing to know about the vaccine." },
+    {
+      type: "p",
+      text: "**Yes.** This is the single most important thing to know about the vaccine.",
+    },
     { type: "p", text: "Cancer Council Australia is direct:" },
     {
       type: "quote",
@@ -670,7 +699,10 @@ export const screeningSteps: ScrollyStep[] = [
     number: "01",
     title: "Booking",
     body: "You can book through your usual GP, a women's health clinic, a sexual health clinic, or some community health centres. When you book, you can ask whether the appointment will be bulk-billed (most are), and whether a female provider can do the test.",
-    quote: { text: "tell them if you would prefer a female to do the test.", source: "HealthDirect Australia" },
+    quote: {
+      text: "tell them if you would prefer a female to do the test.",
+      source: "HealthDirect Australia",
+    },
     illustration: "envelope",
   },
   {
@@ -683,7 +715,10 @@ export const screeningSteps: ScrollyStep[] = [
     number: "03",
     title: "Position",
     body: "Lie on your back with knees bent. A staff member explains what they're about to do.",
-    quote: { text: "Lie on your back with knees bent while a staff member explains the procedure.", source: "HealthDirect Australia" },
+    quote: {
+      text: "Lie on your back with knees bent while a staff member explains the procedure.",
+      source: "HealthDirect Australia",
+    },
     illustration: "chair",
   },
   {
@@ -696,7 +731,10 @@ export const screeningSteps: ScrollyStep[] = [
     number: "05",
     title: "Swab",
     body: "A small soft brush collects cells from the cervix. This part takes about 30 seconds.",
-    quote: { text: "This should not hurt. If you do feel any pain, let the doctor or nurse know straight away.", source: "HealthDirect Australia" },
+    quote: {
+      text: "This should not hurt. If you do feel any pain, let the doctor or nurse know straight away.",
+      source: "HealthDirect Australia",
+    },
     illustration: "swab",
   },
   {
@@ -719,58 +757,90 @@ export const myths: Myth[] = [
   {
     number: "01",
     myth: "If I have HPV, I'm going to get cancer.",
-    reality: "Almost all HPV infections clear on their own. Only the small share that persist for many years carry a real cancer risk, and screening catches changes long before then.",
+    reality:
+      "Almost all HPV infections clear on their own. Only the small share that persist for many years carry a real cancer risk, and screening catches changes long before then.",
     evidence: "Most HPV infections (9 out of 10) go away by themselves within 2 years.",
     source: "Centers for Disease Control and Prevention",
   },
   {
     number: "02",
     myth: "The test is painful, I keep avoiding it.",
-    reality: "Uncomfortable, sometimes. Painful for most people, no. The whole sample takes around ten seconds. And since 2022 in Australia, you can self-collect with a swab if a clinician collection feels like too much.",
-    evidence: "You collect your own sample using a simple swab under healthcare provider guidance, equally effective and suitable for those uncomfortable with clinician collection.",
+    reality:
+      "Uncomfortable, sometimes. Painful for most people, no. The whole sample takes around ten seconds. And since 2022 in Australia, you can self-collect with a swab if a clinician collection feels like too much.",
+    evidence:
+      "You collect your own sample using a simple swab under healthcare provider guidance, equally effective and suitable for those uncomfortable with clinician collection.",
     source: "Cancer Council Australia",
   },
   {
     number: "03",
     myth: "Once you're through menopause, you can stop being screened.",
-    reality: "In Australia, eligibility runs to age 74. Cervical cancer can develop at any age, and post-menopausal screening still matters.",
+    reality:
+      "In Australia, eligibility runs to age 74. Cervical cancer can develop at any age, and post-menopausal screening still matters.",
     evidence: "Eligibility applies regardless of menopausal status.",
     source: "Cancer Council Australia",
   },
   {
     number: "04",
     myth: "I'm only at risk if I'm having vaginal sex with men.",
-    reality: "HPV spreads through any intimate skin-to-skin contact: vaginal, anal, or oral. People in same-sex relationships can have HPV. People who've never had penetrative sex can have HPV. People with one lifetime partner can have HPV.",
-    evidence: "You can contract it by having vaginal, anal, or oral sex with someone who has the virus, even if they don't have signs or symptoms.",
+    reality:
+      "HPV spreads through any intimate skin-to-skin contact: vaginal, anal, or oral. People in same-sex relationships can have HPV. People who've never had penetrative sex can have HPV. People with one lifetime partner can have HPV.",
+    evidence:
+      "You can contract it by having vaginal, anal, or oral sex with someone who has the virus, even if they don't have signs or symptoms.",
     source: "Centers for Disease Control and Prevention",
   },
   {
     number: "05",
     myth: "The vaccine covers it, I'm done.",
-    reality: "The vaccine protects against the highest-risk HPV types, 16 and 18, which cause about 76% of cervical cancers. It doesn't cover every high-risk type. Screening catches what the vaccine misses.",
-    evidence: "HPV vaccines all protect against types 16 and 18, which cause approximately 76% of cervical cancers.",
+    reality:
+      "The vaccine protects against the highest-risk HPV types, 16 and 18, which cause about 76% of cervical cancers. It doesn't cover every high-risk type. Screening catches what the vaccine misses.",
+    evidence:
+      "HPV vaccines all protect against types 16 and 18, which cause approximately 76% of cervical cancers.",
     source: "World Health Organization",
   },
   {
     number: "06",
     myth: "Cervical cancer is in my genes, or it isn't.",
-    reality: "Almost all cervical cancers are caused by long-term HPV infection, not inherited genes. Family history is much less predictive than your screening status.",
-    evidence: "Almost all cervical cancer cases result from infection with oncogenic (cancer-causing) types of HPV.",
+    reality:
+      "Almost all cervical cancers are caused by long-term HPV infection, not inherited genes. Family history is much less predictive than your screening status.",
+    evidence:
+      "Almost all cervical cancer cases result from infection with oncogenic (cancer-causing) types of HPV.",
     source: "World Health Organization",
   },
   {
     number: "07",
     myth: "We're monogamous, HPV isn't relevant to me.",
-    reality: "HPV can stay dormant for years before being detected. You may be carrying it from a relationship years ago and only see it now. A new HPV diagnosis doesn't mean a partner has cheated.",
-    evidence: "Progression typically requires 15-20 years, and HPV transmits even if they don't have signs or symptoms.",
+    reality:
+      "HPV can stay dormant for years before being detected. You may be carrying it from a relationship years ago and only see it now. A new HPV diagnosis doesn't mean a partner has cheated.",
+    evidence:
+      "Progression typically requires 15-20 years, and HPV transmits even if they don't have signs or symptoms.",
     source: "World Health Organization and CDC",
   },
 ];
 
 export const sourcesList = [
-  { title: "Centers for Disease Control and Prevention - HPV", license: "Public domain", url: "https://www.cdc.gov/hpv/" },
-  { title: "World Health Organization - Cervical cancer", license: "CC BY-NC-SA 3.0 IGO", url: "https://www.who.int/news-room/fact-sheets/detail/cervical-cancer" },
-  { title: "Cancer Council Australia - Cervical screening", license: "Used with attribution", url: "https://www.cancer.org.au/cancer-information/causes-and-prevention/early-detection-and-screening/cervical-cancer-screening" },
-  { title: "HealthDirect Australia - Cervical screening test", license: "CC BY 4.0", url: "https://www.healthdirect.gov.au/cervical-screening-test" },
-  { title: "NHS - Your cervical screening results", license: "Open Government Licence v3.0", url: "https://www.nhs.uk/conditions/cervical-screening/your-results/" },
+  {
+    title: "Centers for Disease Control and Prevention - HPV",
+    license: "Public domain",
+    url: "https://www.cdc.gov/hpv/",
+  },
+  {
+    title: "World Health Organization - Cervical cancer",
+    license: "CC BY-NC-SA 3.0 IGO",
+    url: "https://www.who.int/news-room/fact-sheets/detail/cervical-cancer",
+  },
+  {
+    title: "Cancer Council Australia - Cervical screening",
+    license: "Used with attribution",
+    url: "https://www.cancer.org.au/cancer-information/causes-and-prevention/early-detection-and-screening/cervical-cancer-screening",
+  },
+  {
+    title: "HealthDirect Australia - Cervical screening test",
+    license: "CC BY 4.0",
+    url: "https://www.healthdirect.gov.au/cervical-screening-test",
+  },
+  {
+    title: "NHS - Your cervical screening results",
+    license: "Open Government Licence v3.0",
+    url: "https://www.nhs.uk/conditions/cervical-screening/your-results/",
+  },
 ];

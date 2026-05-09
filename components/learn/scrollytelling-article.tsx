@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import type { Article } from "@/lib/learn/articles";
 import { screeningSteps } from "@/lib/learn/articles";
+import { useEffect, useRef, useState } from "react";
 import { ArticleHeader } from "./article-header";
-import { RelatedRow } from "./related-row";
 import { Attribution } from "./attribution";
+import { Branch, Eucalyptus, FernFrond, Ginkgo, Leaf, WillowSprig } from "./botanical";
+import { RelatedRow } from "./related-row";
 import { MobileCTABar } from "./right-rail";
-import { FernFrond, Leaf, WillowSprig, Branch, Ginkgo, Eucalyptus } from "./botanical";
 
 const Illustrations: Record<string, React.ComponentType<{ className?: string }>> = {
   envelope: FernFrond,
@@ -25,16 +25,18 @@ export function ScrollytellingArticle({ article }: { article: Article }) {
   useEffect(() => {
     const obs = new IntersectionObserver(
       (entries) => {
-        entries.forEach((e) => {
+        for (const e of entries) {
           if (e.isIntersecting) {
             const i = Number((e.target as HTMLElement).dataset.index);
             setActive(i);
           }
-        });
+        }
       },
       { rootMargin: "-40% 0px -50% 0px", threshold: 0 }
     );
-    refs.current.forEach((el) => el && obs.observe(el));
+    for (const el of refs.current) {
+      if (el) obs.observe(el);
+    }
     return () => obs.disconnect();
   }, []);
 
@@ -54,13 +56,12 @@ export function ScrollytellingArticle({ article }: { article: Article }) {
 
         <div className="lg:hidden sticky top-16 z-30 -mx-6 px-6 py-3 bg-background border-b border-border">
           <div className="flex gap-1.5">
-            {screeningSteps.map((_, i) => (
+            {screeningSteps.map((s, i) => (
               <div
-                key={i}
+                key={s.number}
                 className="flex-1 h-1 rounded-full"
                 style={{
-                  background:
-                    i <= active ? "var(--color-foreground)" : "var(--color-border)",
+                  background: i <= active ? "var(--color-foreground)" : "var(--color-border)",
                 }}
               />
             ))}
@@ -87,7 +88,10 @@ export function ScrollytellingArticle({ article }: { article: Article }) {
                       }`}
                       style={
                         isActive
-                          ? { borderColor: "color-mix(in oklab, var(--color-sage) 80%, transparent)" }
+                          ? {
+                              borderColor:
+                                "color-mix(in oklab, var(--color-sage) 80%, transparent)",
+                            }
                           : undefined
                       }
                     >

@@ -1,6 +1,6 @@
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { getRelated } from "@/lib/learn/articles";
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { Leaf } from "./botanical";
 
 export function RelatedRow({ slug }: { slug: string }) {
