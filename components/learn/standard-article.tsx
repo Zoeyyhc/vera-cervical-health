@@ -1,14 +1,14 @@
 "use client";
 
+import type { Article, StandardSection } from "@/lib/learn/articles";
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Article, StandardSection } from "@/lib/learn/articles";
 import { ArticleHeader } from "./article-header";
-import { RightRail, MobileCTABar } from "./right-rail";
-import { RelatedRow } from "./related-row";
 import { Attribution } from "./attribution";
 import { Leaf } from "./botanical";
+import { RelatedRow } from "./related-row";
+import { MobileCTABar, RightRail } from "./right-rail";
 
 function slugify(s: string) {
   return s
@@ -66,12 +66,27 @@ export function StandardArticle({
       },
       { rootMargin: "-30% 0px -60% 0px", threshold: 0 }
     );
-    headings.forEach((h) => {
+    for (const h of headings) {
       const el = document.getElementById(h.id);
       if (el) obs.observe(el);
-    });
+    }
     return () => obs.disconnect();
   }, [headings]);
+
+  const sectionKey = (s: StandardSection) => {
+    switch (s.type) {
+      case "p":
+      case "h2":
+        return `${s.type}:${s.text}`;
+      case "quote":
+        return `quote:${s.source}:${s.text}`;
+      case "cta":
+        return `cta:${s.href}:${s.text}`;
+      case "ul":
+      case "ol":
+        return `${s.type}:${s.items.join("|")}`;
+    }
+  };
 
   return (
     <>
@@ -120,10 +135,11 @@ export function StandardArticle({
           </nav>
 
           <article className="max-w-[720px] body-md">
-            {body.map((s, i) => {
+            {body.map((s) => {
+              const k = sectionKey(s);
               if (s.type === "p") {
                 return (
-                  <p key={i} className="mt-5 first:mt-0">
+                  <p key={k} className="mt-5 first:mt-0">
                     <Md>{s.text}</Md>
                   </p>
                 );
@@ -132,7 +148,7 @@ export function StandardArticle({
                 const id = slugify(s.text);
                 return (
                   <h2
-                    key={i}
+                    key={k}
                     id={id}
                     className="h-article-2 mt-12 flex items-center gap-3 scroll-mt-24"
                   >
@@ -143,7 +159,7 @@ export function StandardArticle({
               }
               if (s.type === "quote") {
                 return (
-                  <div key={i} className="mt-6">
+                  <div key={k} className="mt-6">
                     <blockquote className="quote-block">"{s.text}"</blockquote>
                     <p className="caption quote-attr mt-2">Source: {s.source}</p>
                   </div>
@@ -151,9 +167,9 @@ export function StandardArticle({
               }
               if (s.type === "ul") {
                 return (
-                  <ul key={i} className="mt-4 space-y-2 list-disc pl-6">
-                    {s.items.map((it, j) => (
-                      <li key={j}>
+                  <ul key={k} className="mt-4 space-y-2 list-disc pl-6">
+                    {s.items.map((it) => (
+                      <li key={it}>
                         <Md>{it}</Md>
                       </li>
                     ))}
@@ -162,9 +178,9 @@ export function StandardArticle({
               }
               if (s.type === "ol") {
                 return (
-                  <ol key={i} className="mt-4 space-y-2 list-decimal pl-6">
-                    {s.items.map((it, j) => (
-                      <li key={j}>
+                  <ol key={k} className="mt-4 space-y-2 list-decimal pl-6">
+                    {s.items.map((it) => (
+                      <li key={it}>
                         <Md>{it}</Md>
                       </li>
                     ))}
@@ -173,7 +189,7 @@ export function StandardArticle({
               }
               if (s.type === "cta") {
                 return (
-                  <div key={i} className="mt-12 text-center">
+                  <div key={k} className="mt-12 text-center">
                     <a href={s.href} className="btn-primary">
                       {s.text}
                     </a>

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import type { Article } from "@/lib/learn/articles";
 import { myths } from "@/lib/learn/articles";
+import { useEffect, useRef } from "react";
 import { ArticleHeader } from "./article-header";
-import { RelatedRow } from "./related-row";
 import { Attribution } from "./attribution";
+import { RelatedRow } from "./related-row";
 import { MobileCTABar } from "./right-rail";
 
 export function CardGridArticle({ article }: { article: Article }) {
@@ -16,16 +16,16 @@ export function CardGridArticle({ article }: { article: Article }) {
     if (!cards) return;
     const obs = new IntersectionObserver(
       (entries) => {
-        entries.forEach((e) => {
+        for (const e of entries) {
           if (e.isIntersecting) {
             (e.target as HTMLElement).classList.add("fade-up");
             obs.unobserve(e.target);
           }
-        });
+        }
       },
       { threshold: 0.6 }
     );
-    cards.forEach((c) => obs.observe(c));
+    for (const c of Array.from(cards)) obs.observe(c);
     return () => obs.disconnect();
   }, []);
 

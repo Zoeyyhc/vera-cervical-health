@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export function AskAIBand() {
   return (
@@ -23,8 +23,8 @@ export function AskAIBand() {
           <div className="caption mt-5">Assistant</div>
           <p className="body-md mt-1">
             A positive result means HPV was detected. Most infections clear on their own within two
-            years. Your clinician will guide next steps based on the type detected and your screening
-            history.
+            years. Your clinician will guide next steps based on the type detected and your
+            screening history.
           </p>
           <p className="caption mt-3">Source: Cancer Council Australia</p>
         </div>

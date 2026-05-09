@@ -1,10 +1,10 @@
-import Link from "next/link";
-import type { Metadata } from "next";
-import { ArrowRight } from "lucide-react";
-import { SiteFooter } from "@/components/learn/site-footer";
+import { Branch, FernFrond, Ginkgo, Leaf, WillowSprig } from "@/components/learn/botanical";
 import { AskAIBand, FindClinicBand } from "@/components/learn/cta-bands";
-import { FernFrond, Leaf, WillowSprig, Ginkgo, Branch } from "@/components/learn/botanical";
-import { articles, type Category } from "@/lib/learn/articles";
+import { SiteFooter } from "@/components/learn/site-footer";
+import { type Category, articles } from "@/lib/learn/articles";
+import { ArrowRight } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Learn - Cervix",
@@ -44,9 +44,7 @@ export default function LearnHubPage() {
           <Leaf className="w-6 h-6" />
           <h2 className="display-sub">Start here.</h2>
         </div>
-        <p className="body-md text-muted-foreground mt-3">
-          Pick the door that fits where you are.
-        </p>
+        <p className="body-md text-muted-foreground mt-3">Pick the door that fits where you are.</p>
 
         <div className="mt-10 grid gap-6 md:grid-cols-3">
           {[
@@ -155,8 +153,7 @@ export default function LearnHubPage() {
                           <span
                             className="text-[11px] uppercase tracking-[0.5px] px-2 py-0.5 rounded-full"
                             style={{
-                              background:
-                                "color-mix(in oklab, var(--color-rose) 22%, transparent)",
+                              background: "color-mix(in oklab, var(--color-rose) 22%, transparent)",
                             }}
                           >
                             Card series

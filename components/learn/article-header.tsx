@@ -1,6 +1,6 @@
+import type { Article } from "@/lib/learn/articles";
 import Link from "next/link";
 import { Leaf } from "./botanical";
-import type { Article } from "@/lib/learn/articles";
 
 export function ArticleHeader({ article }: { article: Article }) {
   return (
