@@ -15,6 +15,25 @@ import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll } from "vitest";
 import { server } from "./test-utils/server";
 
+// jsdom doesn't implement these DOM APIs; Radix UI primitives (DropdownMenu,
+// Popover, etc.) bail out silently when they're missing, which makes onSelect
+// handlers never fire under tests. Stubbing them lets pointer events flow
+// through Radix's internals as they would in a real browser.
+if (typeof window !== "undefined") {
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.releasePointerCapture) {
+    Element.prototype.releasePointerCapture = () => {};
+  }
+  if (!Element.prototype.setPointerCapture) {
+    Element.prototype.setPointerCapture = () => {};
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
+}
+
 beforeAll(() => {
   server.listen({ onUnhandledRequest: "warn" });
 });

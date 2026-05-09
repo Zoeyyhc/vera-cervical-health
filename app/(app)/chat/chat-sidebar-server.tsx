@@ -4,6 +4,6 @@ import { ChatSidebarClient } from "./chat-sidebar-client";
 
 export async function ChatSidebar() {
   const supabase = createClient();
-  const sessions = await loadSessionsForUser(supabase);
-  return <ChatSidebarClient sessions={sessions} />;
+  const grouped = await loadSessionsForUser(supabase);
+  return <ChatSidebarClient grouped={grouped} />;
 }

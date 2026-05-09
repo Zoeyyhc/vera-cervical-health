@@ -5,7 +5,9 @@ import { z } from "zod";
 
 const sessionIdSchema = z.string().uuid();
 
-async function updateSession(id: string, patch: Record<string, string | null>): Promise<void> {
+type SessionPatch = { starred_at?: string | null; deleted_at?: string | null };
+
+async function updateSession(id: string, patch: SessionPatch): Promise<void> {
   const validId = sessionIdSchema.parse(id);
   const supabase = createClient();
   const { error } = await supabase.from("chat_sessions").update(patch).eq("id", validId);
