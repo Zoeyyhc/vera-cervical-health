@@ -90,6 +90,27 @@ describe("ChatSidebarClient", () => {
     expect(screen.getByText(/RECENT/i)).toBeInTheDocument();
   });
 
+  it("re-renders with new sessions when the grouped prop changes (e.g. after router.refresh)", () => {
+    const { rerender } = render(<ChatSidebarClient grouped={grouped} />);
+    expect(screen.queryByText("Brand-new session")).toBeNull();
+
+    const updated: GroupedSessions = {
+      starred: grouped.starred,
+      recent: [
+        {
+          id: "rec-new",
+          displayTitle: "Brand-new session",
+          updatedAt: "2026-05-10T01:00:00Z",
+          starredAt: null,
+        },
+        ...grouped.recent,
+      ],
+    };
+    rerender(<ChatSidebarClient grouped={updated} />);
+
+    expect(screen.getByText("Brand-new session")).toBeInTheDocument();
+  });
+
   it("calls starSession when an unstarred row's star icon is clicked", async () => {
     render(<ChatSidebarClient grouped={grouped} />);
     fireEvent.click(screen.getByLabelText("Star When to start screening"));

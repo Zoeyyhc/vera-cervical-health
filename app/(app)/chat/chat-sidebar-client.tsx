@@ -16,7 +16,7 @@ import type { GroupedSessions, SessionListItem } from "@/lib/chat/sessions";
 import { MoreHorizontalIcon, PlusIcon, StarIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 type Props = {
@@ -30,13 +30,21 @@ export function ChatSidebarClient({ grouped }: Props) {
   const activeId = match?.[1] ?? null;
 
   // Local optimistic state — server is source of truth on next router.refresh()
-  // (e.g. after Undo or navigation). Star toggles flip starredAt in place; soft
-  // delete drops the id into a Set that hides the row.
+  // (e.g. after sending the first message in a new session, after Undo, or on
+  // navigation). Star toggles flip starredAt in place; soft delete drops the
+  // id into a Set that hides the row. Fresh `grouped` from the server resets
+  // both — that's how a brand-new session shows up in the sidebar without a
+  // manual page refresh.
   const [items, setItems] = useState<SessionListItem[]>(() => [
     ...grouped.starred,
     ...grouped.recent,
   ]);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    setItems([...grouped.starred, ...grouped.recent]);
+    setHiddenIds(new Set());
+  }, [grouped]);
 
   const visible = useMemo(() => items.filter((s) => !hiddenIds.has(s.id)), [items, hiddenIds]);
   const starred = visible.filter((s) => s.starredAt !== null);
@@ -210,7 +218,7 @@ function SessionRow({
             </button>
           }
         />
-        <DropdownMenuContent align="end" className="w-32">
+        <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => onDelete(item)}>Delete</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
