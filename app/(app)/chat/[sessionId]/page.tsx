@@ -9,11 +9,15 @@ export default async function ChatSessionPage({ params }: Props) {
   const { sessionId } = params;
   const supabase = createClient();
 
-  // Validate the session exists and belongs to the caller (RLS scopes this).
+  // Validate the session exists, is not soft-deleted, and belongs to the
+  // caller (RLS scopes the query to the current user). A soft-deleted session
+  // 404s even for its owner — the row is preserved in the DB so a future
+  // restore path can revive it, but the URL is intentionally dead.
   const { data: session, error: sessionErr } = await supabase
     .from("chat_sessions")
     .select("id")
     .eq("id", sessionId)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (sessionErr || !session) notFound();
