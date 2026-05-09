@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CitationChips } from "./citation-chips";
+import { EmptyState } from "./empty-state";
 
 export type ChatMessage = {
   id: string;
@@ -41,21 +42,19 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
     }
   }, [messages]);
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  // Pure submit pipeline — takes the message text directly so the input
+  // field and the EmptyState's prompt buttons can both drive it without a
+  // state round-trip.
+  async function submit(text: string) {
     if (isStreaming) return;
-    const trimmed = input.trim();
+    const trimmed = text.trim();
     if (!trimmed) return;
 
-    setInput("");
     setIsStreaming(true);
 
     // Capture before any state mutation: a "new" send is one where no session
     // existed yet. Only this case needs router.refresh() at done — the sidebar
-    // has to learn about the freshly created row. Follow-up messages on an
-    // existing session bump updated_at on the server, but we accept a slightly
-    // stale sidebar order until the next full nav rather than re-running the
-    // sessions query (which previously fired on every single message).
+    // has to learn about the freshly created row.
     const wasNewSession = sessionId === null;
 
     const userMsg: ChatMessage = {
@@ -89,9 +88,6 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
 
       for await (const event of parseChatStream(response.body)) {
         if (event.type === "start") {
-          // First send when no session existed — swap the URL to /chat/<id>
-          // without unmounting the chat-client (router.replace would cross a
-          // route boundary and lose the in-flight stream).
           if (sessionId === null) {
             window.history.replaceState({}, "", `/chat/${event.sessionId}`);
           }
@@ -108,14 +104,8 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, status: "complete" } : m))
           );
-          // Only refresh on the first turn of a brand-new session so the
-          // sidebar picks up the new row. For follow-up turns the sidebar
-          // entry already exists; skipping the refresh avoids re-running the
-          // sessions query (and re-rendering the layout) on every message.
           if (wasNewSession) router.refresh();
         } else {
-          // event.type === "error" — server-side stream error. The route
-          // already persisted the partial with a marker; just notify the user.
           toast.error(event.message || "Something went wrong");
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, status: "error" } : m))
@@ -133,6 +123,14 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
     }
   }
 
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    setInput("");
+    void submit(trimmed);
+  }
+
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -146,7 +144,7 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-8">
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
           {messages.length === 0 ? (
-            <EmptyState />
+            <EmptyState onPrompt={submit} disabled={isStreaming} />
           ) : (
             messages.map((m) => <MessageBubble key={m.id} message={m} />)
           )}
@@ -173,15 +171,6 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
           </Button>
         </div>
       </form>
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="text-muted-gray pt-12 text-center text-sm">
-      Ask a cervical-health question to get started. Replies are not a substitute for a clinician's
-      advice — see a doctor for symptoms or specific situations.
     </div>
   );
 }
