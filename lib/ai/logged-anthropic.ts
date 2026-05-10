@@ -76,12 +76,14 @@ export async function loggedMessagesCreate(
   try {
     const res = await getAnthropicClient().messages.create(params);
     const u = res.usage;
-    const usage: AuditUsage = {
-      input_tokens: u.input_tokens,
-      output_tokens: u.output_tokens,
-      cache_read_input_tokens: u.cache_read_input_tokens ?? 0,
-      cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0,
-    };
+    const usage: AuditUsage = u
+      ? {
+          input_tokens: u.input_tokens,
+          output_tokens: u.output_tokens,
+          cache_read_input_tokens: u.cache_read_input_tokens ?? 0,
+          cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0,
+        }
+      : { ...ZERO_USAGE };
     void writeAuditRow(
       buildRow({
         params,
