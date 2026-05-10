@@ -1,6 +1,7 @@
-import { CLAUDE_MODEL, getAnthropicClient } from "@/lib/ai/anthropic";
+import { CLAUDE_MODEL } from "@/lib/ai/anthropic";
 import type { ChatHistoryMessage } from "@/lib/ai/context-window";
-import { DEFAULT_SYSTEM_PROMPT } from "@/lib/ai/system-prompt";
+import { loggedMessagesStream } from "@/lib/ai/logged-anthropic";
+import { RESPONSE_DEFAULT_PROMPT } from "@/lib/ai/prompts";
 import type { Source } from "@/types/agents";
 
 const MAX_TOKENS = 4096;
@@ -37,20 +38,25 @@ export type AgentChunk = { type: "text"; text: string } | { type: "sources"; sou
  * the model string is hard-coded (never from env).
  */
 export async function* runResponseAgent(ctx: ResponseAgentContext): AsyncIterable<AgentChunk> {
-  const baseSystem = ctx.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+  const promptDef = ctx.systemPrompt
+    ? { id: "response.override", version: "v1", text: ctx.systemPrompt }
+    : RESPONSE_DEFAULT_PROMPT;
+
   const system = ctx.groundingContext
-    ? `${baseSystem}\n\nRetrieved context:\n${ctx.groundingContext}`
-    : baseSystem;
+    ? `${promptDef.text}\n\nRetrieved context:\n${ctx.groundingContext}`
+    : promptDef.text;
 
   const messages = [...ctx.history, { role: "user" as const, content: ctx.userMessage }];
 
-  const anthropic = getAnthropicClient();
-  const stream = anthropic.messages.stream({
-    model: CLAUDE_MODEL,
-    max_tokens: MAX_TOKENS,
-    system,
-    messages,
-  });
+  const stream = loggedMessagesStream(
+    {
+      model: CLAUDE_MODEL,
+      max_tokens: MAX_TOKENS,
+      system,
+      messages,
+    },
+    { agent: "response", prompt: promptDef },
+  );
 
   for await (const event of stream) {
     if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
