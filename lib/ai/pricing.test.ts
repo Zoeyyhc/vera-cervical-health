@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { computeCostUsd } from "@/lib/ai/pricing";
+import { describe, expect, it } from "vitest";
 
 describe("computeCostUsd", () => {
   it("computes cost for claude-sonnet-4-6 with input/output tokens", () => {

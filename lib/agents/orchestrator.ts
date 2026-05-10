@@ -33,7 +33,7 @@ export async function classifyIntent(userMessage: string): Promise<ClassifyResul
         system: CLASSIFIER_PROMPT.text,
         messages: [{ role: "user", content: userMessage }],
       },
-      { agent: "classifier", prompt: CLASSIFIER_PROMPT },
+      { agent: "classifier", prompt: CLASSIFIER_PROMPT }
     );
 
     const raw = response.content

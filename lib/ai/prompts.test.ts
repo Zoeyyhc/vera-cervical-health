@@ -1,9 +1,5 @@
+import { CLASSIFIER_PROMPT, RESPONSE_DEFAULT_PROMPT, promptHash } from "@/lib/ai/prompts";
 import { describe, expect, it } from "vitest";
-import {
-  CLASSIFIER_PROMPT,
-  RESPONSE_DEFAULT_PROMPT,
-  promptHash,
-} from "@/lib/ai/prompts";
 
 describe("prompt registry", () => {
   it("CLASSIFIER_PROMPT is a complete record", () => {

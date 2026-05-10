@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { type AuditContext, auditContext } from "@/lib/ai/audit-context";
+import { describe, expect, it } from "vitest";
 
 const fakeCtx = {
   // biome-ignore lint/suspicious/noExplicitAny: test fixture, not a real client

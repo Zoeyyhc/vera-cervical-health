@@ -1,8 +1,8 @@
 // @vitest-environment node
 
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { type AuditContext, auditContext } from "@/lib/ai/audit-context";
 import { CLASSIFIER_PROMPT, promptHash } from "@/lib/ai/prompts";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/ai/anthropic", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/ai/anthropic")>();
@@ -10,10 +10,7 @@ vi.mock("@/lib/ai/anthropic", async (importOriginal) => {
 });
 
 import { getAnthropicClient } from "@/lib/ai/anthropic";
-import {
-  loggedMessagesCreate,
-  loggedMessagesStream,
-} from "@/lib/ai/logged-anthropic";
+import { loggedMessagesCreate, loggedMessagesStream } from "@/lib/ai/logged-anthropic";
 import { RESPONSE_DEFAULT_PROMPT } from "@/lib/ai/prompts";
 
 function fakeCtx(insert: ReturnType<typeof vi.fn>): AuditContext {
@@ -53,7 +50,7 @@ describe("loggedMessagesCreate", () => {
           system: CLASSIFIER_PROMPT.text,
           messages: [{ role: "user", content: "hello" }],
         },
-        { agent: "classifier", prompt: CLASSIFIER_PROMPT },
+        { agent: "classifier", prompt: CLASSIFIER_PROMPT }
       );
     });
 
@@ -100,9 +97,9 @@ describe("loggedMessagesCreate", () => {
             system: "x",
             messages: [{ role: "user", content: "hi" }],
           },
-          { agent: "classifier", prompt: CLASSIFIER_PROMPT },
-        ),
-      ),
+          { agent: "classifier", prompt: CLASSIFIER_PROMPT }
+        )
+      )
     ).rejects.toThrow("boom");
 
     await new Promise((r) => setImmediate(r));
@@ -135,7 +132,7 @@ describe("loggedMessagesCreate", () => {
         system: "x",
         messages: [{ role: "user", content: "hi" }],
       },
-      { agent: "classifier", prompt: CLASSIFIER_PROMPT },
+      { agent: "classifier", prompt: CLASSIFIER_PROMPT }
     );
 
     await new Promise((r) => setImmediate(r));
@@ -168,9 +165,9 @@ describe("loggedMessagesCreate", () => {
             system: "x",
             messages: [{ role: "user", content: "hi" }],
           },
-          { agent: "classifier", prompt: CLASSIFIER_PROMPT },
-        ),
-      ),
+          { agent: "classifier", prompt: CLASSIFIER_PROMPT }
+        )
+      )
     ).resolves.toBeDefined();
 
     await new Promise((r) => setImmediate(r));
@@ -225,7 +222,7 @@ describe("loggedMessagesStream", () => {
           system: RESPONSE_DEFAULT_PROMPT.text,
           messages: [{ role: "user", content: "hi" }],
         },
-        { agent: "response", prompt: RESPONSE_DEFAULT_PROMPT },
+        { agent: "response", prompt: RESPONSE_DEFAULT_PROMPT }
       )) {
         collected.push(ev);
       }
@@ -277,11 +274,11 @@ describe("loggedMessagesStream", () => {
             system: "x",
             messages: [{ role: "user", content: "hi" }],
           },
-          { agent: "response", prompt: RESPONSE_DEFAULT_PROMPT },
+          { agent: "response", prompt: RESPONSE_DEFAULT_PROMPT }
         )) {
           /* drain */
         }
-      }),
+      })
     ).rejects.toThrow("upstream blew up");
 
     await new Promise((r) => setImmediate(r));
@@ -305,7 +302,7 @@ describe("loggedMessagesStream", () => {
         system: "x",
         messages: [{ role: "user", content: "hi" }],
       },
-      { agent: "response", prompt: RESPONSE_DEFAULT_PROMPT },
+      { agent: "response", prompt: RESPONSE_DEFAULT_PROMPT }
     )) {
       /* drain */
     }

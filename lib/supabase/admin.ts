@@ -13,9 +13,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 export function createServiceRoleClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!url) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL — required for the service-role client.",
-    );
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL — required for the service-role client.");
   }
   return createSupabaseClient<Database>(url, env.supabaseServiceRoleKey, {
     auth: {

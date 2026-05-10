@@ -1,6 +1,8 @@
 import { runOrchestrator } from "@/lib/agents/orchestrator";
+import { auditContext } from "@/lib/ai/audit-context";
 import { loadRecentMessages } from "@/lib/ai/context-window";
 import { type ChatStreamEvent, encodeChatStreamEvent } from "@/lib/ai/streaming";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { chatRequestSchema } from "@/lib/validations/chat";
 
@@ -86,74 +88,80 @@ export async function POST(request: Request) {
   //    surface as `error` events on the stream.
   const sessionIdResolved = sessionId;
   const userMessage = parsed.data.message;
+  const supabaseAdmin = createServiceRoleClient();
   const stream = new ReadableStream({
     async start(controller) {
       const send = (event: ChatStreamEvent) => {
         controller.enqueue(encodeChatStreamEvent(event));
       };
 
-      send({ type: "start", sessionId: sessionIdResolved });
+      await auditContext.run(
+        { supabaseAdmin, userId: user.id, sessionId: sessionIdResolved },
+        async () => {
+          send({ type: "start", sessionId: sessionIdResolved });
 
-      let assistantText = "";
-      let collectedSources: import("@/types/agents").Source[] | null = null;
-      try {
-        for await (const chunk of runOrchestrator(supabase, {
-          userMessage,
-          history,
-          locale,
-        })) {
-          if (chunk.type === "text") {
-            assistantText += chunk.text;
-            send({ type: "text", text: chunk.text });
-          } else if (chunk.type === "sources") {
-            collectedSources = chunk.sources;
-            send({ type: "sources", sources: chunk.sources });
+          let assistantText = "";
+          let collectedSources: import("@/types/agents").Source[] | null = null;
+          try {
+            for await (const chunk of runOrchestrator(supabase, {
+              userMessage,
+              history,
+              locale,
+            })) {
+              if (chunk.type === "text") {
+                assistantText += chunk.text;
+                send({ type: "text", text: chunk.text });
+              } else if (chunk.type === "sources") {
+                collectedSources = chunk.sources;
+                send({ type: "sources", sources: chunk.sources });
+              }
+            }
+
+            // Persist the completed assistant message before signalling done.
+            const { error: insertErr } = await supabase.from("chat_messages").insert({
+              session_id: sessionIdResolved,
+              role: "assistant",
+              content: assistantText,
+              // biome-ignore lint/suspicious/noExplicitAny: jsonb column type erases shape; cast is intentional
+              sources: collectedSources as any,
+            });
+            if (insertErr) {
+              // Same policy as the non-streaming version: log but still emit done,
+              // because the user already saw the reply on screen.
+              console.error(
+                "[/api/chat] assistant message insert failed (reply still streamed):",
+                insertErr instanceof Error ? insertErr.message : insertErr
+              );
+            }
+
+            send({ type: "done" });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "stream error";
+            console.error("[/api/chat] stream error:", message);
+
+            // Persist whatever we got, with a human-readable interruption marker.
+            const interrupted =
+              assistantText.length > 0
+                ? `${assistantText}\n\n[reply was interrupted: ${message}]`
+                : `[reply was interrupted: ${message}]`;
+            const { error: insertErr } = await supabase.from("chat_messages").insert({
+              session_id: sessionIdResolved,
+              role: "assistant",
+              content: interrupted,
+            });
+            if (insertErr) {
+              console.error(
+                "[/api/chat] interrupted-message insert failed:",
+                insertErr instanceof Error ? insertErr.message : insertErr
+              );
+            }
+
+            send({ type: "error", message });
+          } finally {
+            controller.close();
           }
         }
-
-        // Persist the completed assistant message before signalling done.
-        const { error: insertErr } = await supabase.from("chat_messages").insert({
-          session_id: sessionIdResolved,
-          role: "assistant",
-          content: assistantText,
-          // biome-ignore lint/suspicious/noExplicitAny: jsonb column type erases shape; cast is intentional
-          sources: collectedSources as any,
-        });
-        if (insertErr) {
-          // Same policy as the non-streaming version: log but still emit done,
-          // because the user already saw the reply on screen.
-          console.error(
-            "[/api/chat] assistant message insert failed (reply still streamed):",
-            insertErr instanceof Error ? insertErr.message : insertErr
-          );
-        }
-
-        send({ type: "done" });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "stream error";
-        console.error("[/api/chat] stream error:", message);
-
-        // Persist whatever we got, with a human-readable interruption marker.
-        const interrupted =
-          assistantText.length > 0
-            ? `${assistantText}\n\n[reply was interrupted: ${message}]`
-            : `[reply was interrupted: ${message}]`;
-        const { error: insertErr } = await supabase.from("chat_messages").insert({
-          session_id: sessionIdResolved,
-          role: "assistant",
-          content: interrupted,
-        });
-        if (insertErr) {
-          console.error(
-            "[/api/chat] interrupted-message insert failed:",
-            insertErr instanceof Error ? insertErr.message : insertErr
-          );
-        }
-
-        send({ type: "error", message });
-      } finally {
-        controller.close();
-      }
+      );
     },
   });
 

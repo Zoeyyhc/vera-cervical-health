@@ -49,8 +49,7 @@ function buildRow(args: {
     output_tokens: u.output_tokens,
     cache_read_tokens: u.cache_read_input_tokens,
     cache_write_tokens: u.cache_creation_input_tokens,
-    cost_usd:
-      args.status === "ok" ? computeCostUsd(args.params.model, u) : null,
+    cost_usd: args.status === "ok" ? computeCostUsd(args.params.model, u) : null,
     started_at: args.startedAt.toISOString(),
     duration_ms: Math.round(args.durationMs),
     status: args.status,
@@ -69,7 +68,7 @@ async function writeAuditRow(row: ReturnType<typeof buildRow>): Promise<void> {
 
 export async function loggedMessagesCreate(
   params: Anthropic.MessageCreateParamsNonStreaming,
-  meta: LoggedCallMeta,
+  meta: LoggedCallMeta
 ): Promise<Anthropic.Message> {
   const startedAt = new Date();
   const t0 = performance.now();
@@ -93,7 +92,7 @@ export async function loggedMessagesCreate(
         usage,
         status: "ok",
         streamed: false,
-      }),
+      })
     );
     return res;
   } catch (err) {
@@ -107,7 +106,7 @@ export async function loggedMessagesCreate(
         status: "error",
         streamed: false,
         error: err,
-      }),
+      })
     );
     throw err;
   }
@@ -115,7 +114,7 @@ export async function loggedMessagesCreate(
 
 export async function* loggedMessagesStream(
   params: Anthropic.MessageStreamParams,
-  meta: LoggedCallMeta,
+  meta: LoggedCallMeta
 ): AsyncIterable<Anthropic.MessageStreamEvent> {
   const startedAt = new Date();
   const t0 = performance.now();
@@ -142,7 +141,7 @@ export async function* loggedMessagesStream(
         usage,
         status: "ok",
         streamed: true,
-      }),
+      })
     );
   } catch (err) {
     void writeAuditRow(
@@ -155,7 +154,7 @@ export async function* loggedMessagesStream(
         status: "error",
         streamed: true,
         error: err,
-      }),
+      })
     );
     throw err;
   }

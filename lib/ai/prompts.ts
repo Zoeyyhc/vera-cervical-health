@@ -22,14 +22,10 @@ Categories:
 - events_request   : questions about upcoming events, meetups, screening clinics, conferences, or local activity
 - general_chat     : greetings, off-topic questions, or anything that doesn't fit above
 
-If unsure, choose general_chat.`,
+If unsure, choose general_chat.`
 );
 
-export const RESPONSE_DEFAULT_PROMPT = defPrompt(
-  "response.default",
-  "v1",
-  DEFAULT_SYSTEM_PROMPT,
-);
+export const RESPONSE_DEFAULT_PROMPT = defPrompt("response.default", "v1", DEFAULT_SYSTEM_PROMPT);
 
 export function promptHash(text: string): string {
   return createHash("sha256").update(text).digest("hex");

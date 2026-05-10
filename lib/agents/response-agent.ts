@@ -55,7 +55,7 @@ export async function* runResponseAgent(ctx: ResponseAgentContext): AsyncIterabl
       system,
       messages,
     },
-    { agent: "response", prompt: promptDef },
+    { agent: "response", prompt: promptDef }
   );
 
   for await (const event of stream) {
