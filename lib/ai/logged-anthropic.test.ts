@@ -10,7 +10,11 @@ vi.mock("@/lib/ai/anthropic", async (importOriginal) => {
 });
 
 import { getAnthropicClient } from "@/lib/ai/anthropic";
-import { loggedMessagesCreate } from "@/lib/ai/logged-anthropic";
+import {
+  loggedMessagesCreate,
+  loggedMessagesStream,
+} from "@/lib/ai/logged-anthropic";
+import { RESPONSE_DEFAULT_PROMPT } from "@/lib/ai/prompts";
 
 function fakeCtx(insert: ReturnType<typeof vi.fn>): AuditContext {
   return {
@@ -172,5 +176,140 @@ describe("loggedMessagesCreate", () => {
     await new Promise((r) => setImmediate(r));
     expect(err).toHaveBeenCalled();
     err.mockRestore();
+  });
+});
+
+function makeStream(events: unknown[]) {
+  return {
+    [Symbol.asyncIterator]: async function* () {
+      for (const ev of events) yield ev;
+    },
+  };
+}
+
+describe("loggedMessagesStream", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("yields all events to the consumer and writes one audit row", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const events = [
+      {
+        type: "message_start",
+        message: {
+          usage: {
+            input_tokens: 12,
+            cache_read_input_tokens: 4,
+            cache_creation_input_tokens: 0,
+          },
+        },
+      },
+      {
+        type: "content_block_delta",
+        delta: { type: "text_delta", text: "hi" },
+      },
+      { type: "message_delta", usage: { output_tokens: 7 } },
+      { type: "message_stop" },
+    ];
+    const streamFn = vi.fn(() => makeStream(events));
+    vi.mocked(getAnthropicClient).mockReturnValue({
+      messages: { stream: streamFn },
+      // biome-ignore lint/suspicious/noExplicitAny: partial Anthropic surface
+    } as any);
+
+    const collected: unknown[] = [];
+    await auditContext.run(fakeCtx(insert), async () => {
+      for await (const ev of loggedMessagesStream(
+        {
+          model: "claude-sonnet-4-6",
+          max_tokens: 4096,
+          system: RESPONSE_DEFAULT_PROMPT.text,
+          messages: [{ role: "user", content: "hi" }],
+        },
+        { agent: "response", prompt: RESPONSE_DEFAULT_PROMPT },
+      )) {
+        collected.push(ev);
+      }
+    });
+    await new Promise((r) => setImmediate(r));
+
+    expect(collected).toEqual(events);
+    expect(insert).toHaveBeenCalledTimes(1);
+    const row = insert.mock.calls[0][0];
+    expect(row).toMatchObject({
+      agent: "response",
+      streamed: true,
+      input_tokens: 12,
+      output_tokens: 7,
+      cache_read_tokens: 4,
+      cache_write_tokens: 0,
+      status: "ok",
+    });
+  });
+
+  it("writes an error row and rethrows when the upstream stream throws", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const failing = {
+      [Symbol.asyncIterator]: async function* () {
+        yield {
+          type: "message_start",
+          message: {
+            usage: {
+              input_tokens: 5,
+              cache_read_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+            },
+          },
+        };
+        throw new Error("upstream blew up");
+      },
+    };
+    vi.mocked(getAnthropicClient).mockReturnValue({
+      messages: { stream: vi.fn(() => failing) },
+      // biome-ignore lint/suspicious/noExplicitAny: partial Anthropic surface
+    } as any);
+
+    await expect(
+      auditContext.run(fakeCtx(insert), async () => {
+        for await (const _ev of loggedMessagesStream(
+          {
+            model: "claude-sonnet-4-6",
+            max_tokens: 4096,
+            system: "x",
+            messages: [{ role: "user", content: "hi" }],
+          },
+          { agent: "response", prompt: RESPONSE_DEFAULT_PROMPT },
+        )) {
+          /* drain */
+        }
+      }),
+    ).rejects.toThrow("upstream blew up");
+
+    await new Promise((r) => setImmediate(r));
+    const row = insert.mock.calls[0][0];
+    expect(row.status).toBe("error");
+    expect(row.error_message).toBe("upstream blew up");
+    expect(row.input_tokens).toBe(5);
+  });
+
+  it("skips the insert when no audit context is active", async () => {
+    const insert = vi.fn();
+    vi.mocked(getAnthropicClient).mockReturnValue({
+      messages: { stream: vi.fn(() => makeStream([{ type: "message_stop" }])) },
+      // biome-ignore lint/suspicious/noExplicitAny: partial Anthropic surface
+    } as any);
+
+    for await (const _ev of loggedMessagesStream(
+      {
+        model: "claude-sonnet-4-6",
+        max_tokens: 4096,
+        system: "x",
+        messages: [{ role: "user", content: "hi" }],
+      },
+      { agent: "response", prompt: RESPONSE_DEFAULT_PROMPT },
+    )) {
+      /* drain */
+    }
+    await new Promise((r) => setImmediate(r));
+    expect(insert).not.toHaveBeenCalled();
   });
 });

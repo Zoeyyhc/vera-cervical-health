@@ -110,3 +110,51 @@ export async function loggedMessagesCreate(
     throw err;
   }
 }
+
+export async function* loggedMessagesStream(
+  params: Anthropic.MessageStreamParams,
+  meta: LoggedCallMeta,
+): AsyncIterable<Anthropic.MessageStreamEvent> {
+  const startedAt = new Date();
+  const t0 = performance.now();
+  const usage: AuditUsage = { ...ZERO_USAGE };
+  try {
+    const stream = getAnthropicClient().messages.stream(params);
+    for await (const ev of stream as AsyncIterable<Anthropic.MessageStreamEvent>) {
+      if (ev.type === "message_start") {
+        const m = ev.message.usage;
+        usage.input_tokens = m.input_tokens;
+        usage.cache_read_input_tokens = m.cache_read_input_tokens ?? 0;
+        usage.cache_creation_input_tokens = m.cache_creation_input_tokens ?? 0;
+      } else if (ev.type === "message_delta" && ev.usage) {
+        usage.output_tokens = ev.usage.output_tokens;
+      }
+      yield ev;
+    }
+    void writeAuditRow(
+      buildRow({
+        params,
+        meta,
+        startedAt,
+        durationMs: performance.now() - t0,
+        usage,
+        status: "ok",
+        streamed: true,
+      }),
+    );
+  } catch (err) {
+    void writeAuditRow(
+      buildRow({
+        params,
+        meta,
+        startedAt,
+        durationMs: performance.now() - t0,
+        usage,
+        status: "error",
+        streamed: true,
+        error: err,
+      }),
+    );
+    throw err;
+  }
+}
