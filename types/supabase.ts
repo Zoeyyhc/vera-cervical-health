@@ -1,3 +1,4 @@
+Connecting to db 5432
 export type Json =
   | string
   | number
@@ -168,6 +169,93 @@ export type Database = {
           source?: string | null
         }
         Relationships: []
+      }
+      llm_calls: {
+        Row: {
+          agent: string
+          cache_read_tokens: number
+          cache_write_tokens: number
+          cost_usd: number | null
+          created_at: string
+          duration_ms: number
+          error_message: string | null
+          id: string
+          input_tokens: number
+          max_tokens: number
+          model: string
+          output_tokens: number
+          prompt_hash: string
+          prompt_id: string
+          prompt_version: string
+          session_id: string | null
+          started_at: string
+          status: string
+          streamed: boolean
+          temperature: number | null
+          user_id: string | null
+        }
+        Insert: {
+          agent: string
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          cost_usd?: number | null
+          created_at?: string
+          duration_ms: number
+          error_message?: string | null
+          id?: string
+          input_tokens: number
+          max_tokens: number
+          model: string
+          output_tokens: number
+          prompt_hash: string
+          prompt_id: string
+          prompt_version: string
+          session_id?: string | null
+          started_at: string
+          status: string
+          streamed?: boolean
+          temperature?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          agent?: string
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          cost_usd?: number | null
+          created_at?: string
+          duration_ms?: number
+          error_message?: string | null
+          id?: string
+          input_tokens?: number
+          max_tokens?: number
+          model?: string
+          output_tokens?: number
+          prompt_hash?: string
+          prompt_id?: string
+          prompt_version?: string
+          session_id?: string | null
+          started_at?: string
+          status?: string
+          streamed?: boolean
+          temperature?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "llm_calls_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "llm_calls_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -361,3 +449,5 @@ export const Constants = {
   },
 } as const
 
+A new version of Supabase CLI is available: v2.98.2 (currently installed v2.84.2)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
