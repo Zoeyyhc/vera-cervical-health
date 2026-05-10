@@ -2,12 +2,13 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-function* walk(dir: string): Generator<string> {
+function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
-    if (statSync(full).isDirectory()) yield* walk(full);
-    else if (full.endsWith(".ts") && !full.endsWith(".test.ts")) yield full;
+    if (statSync(full).isDirectory()) walk(full, out);
+    else if (full.endsWith(".ts") && !full.endsWith(".test.ts")) out.push(full);
   }
+  return out;
 }
 
 describe("agent guardrails", () => {
@@ -21,9 +22,7 @@ describe("agent guardrails", () => {
     }
     expect(
       offenders,
-      "Direct Anthropic SDK calls found in lib/agents/. " +
-        "Use loggedMessagesCreate / loggedMessagesStream from @/lib/ai/logged-anthropic instead.\n" +
-        offenders.join("\n"),
+      `Direct Anthropic SDK calls found in lib/agents/. Use loggedMessagesCreate / loggedMessagesStream from @/lib/ai/logged-anthropic instead.\n${offenders.join("\n")}`
     ).toEqual([]);
   });
 });

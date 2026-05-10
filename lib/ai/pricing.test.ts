@@ -33,10 +33,10 @@ describe("computeCostUsd", () => {
   });
 
   it("handles missing cache fields gracefully", () => {
-    // biome-ignore lint/suspicious/noExplicitAny: testing the null-safety of optional cache fields
     const cost = computeCostUsd("claude-sonnet-4-6", {
       input_tokens: 1_000_000,
       output_tokens: 0,
+      // biome-ignore lint/suspicious/noExplicitAny: testing the null-safety of optional cache fields
     } as any);
     expect(cost).toBeCloseTo(3.0, 6);
   });
