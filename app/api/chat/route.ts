@@ -57,15 +57,10 @@ export async function POST(request: Request) {
     return Response.json({ error: "history_load_failed" }, { status: 500 });
   }
 
-  // 4a. Best-effort locale lookup for the events agent's location hint. A
-  //     missing or failed read is fine — the agent gracefully prompts the
-  //     user for a city.
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("locale")
-    .eq("id", user.id)
-    .maybeSingle();
-  const locale = profile?.locale ?? null;
+  // 4a. City for the events agent comes from the chat client (browser
+  //     geolocation → /api/geocode/reverse). Optional; events agent falls
+  //     back to asking for a city when absent.
+  const city = parsed.data.city ?? null;
 
   // 5. Persist the user message BEFORE calling Claude — durability over speed.
   //    The chat_sessions.updated_at trigger from #24 fires here so the
@@ -106,7 +101,7 @@ export async function POST(request: Request) {
             for await (const chunk of runOrchestrator(supabase, {
               userMessage,
               history,
-              locale,
+              city,
             })) {
               if (chunk.type === "text") {
                 assistantText += chunk.text;

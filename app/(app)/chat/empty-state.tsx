@@ -2,7 +2,7 @@
 
 import { CalendarDaysIcon, NewspaperIcon } from "lucide-react";
 
-export const NEWS_PROMPT = "Show me the latest news on cervical and women's health.";
+export const NEWS_PROMPT = "Show me the latest cervical health news.";
 export const EVENTS_PROMPT = "What women's health events are happening near me?";
 
 export const PROMPT_SUGGESTIONS = [

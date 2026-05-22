@@ -22,7 +22,6 @@ type SupabaseFromMock = {
   sessionSingle: ReturnType<typeof vi.fn>;
   messageInsert: ReturnType<typeof vi.fn>;
   historyOrder: ReturnType<typeof vi.fn>;
-  profileMaybeSingle: ReturnType<typeof vi.fn>;
 };
 
 type SupabaseChainOpts = {
@@ -58,21 +57,13 @@ function mockSupabaseChain(opts: SupabaseChainOpts = {}): SupabaseFromMock {
   const historyEq = vi.fn().mockReturnValue({ order: historyOrder });
   const messageSelect = vi.fn().mockReturnValue({ eq: historyEq });
 
-  // `profiles` lookup is best-effort: route reads `locale` to thread into the
-  // events agent. Default mock returns no profile row — tests don't care
-  // about locale unless they specifically simulate an events_request flow.
-  const profileMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-  const profileEq = vi.fn().mockReturnValue({ maybeSingle: profileMaybeSingle });
-  const profileSelect = vi.fn().mockReturnValue({ eq: profileEq });
-
   const from = vi.fn((table: string) => {
     if (table === "chat_sessions") return { insert: sessionInsert };
     if (table === "chat_messages") return { insert: messageInsert, select: messageSelect };
-    if (table === "profiles") return { select: profileSelect };
     throw new Error(`Unmocked table: ${table}`);
   });
 
-  return { from, sessionInsert, sessionSingle, messageInsert, historyOrder, profileMaybeSingle };
+  return { from, sessionInsert, sessionSingle, messageInsert, historyOrder };
 }
 
 function mockSupabase(
@@ -248,7 +239,7 @@ describe("POST /api/chat", () => {
     // Orchestrator was called with the supabase client + userMessage + (empty) history
     expect(runOrchestrator).toHaveBeenCalledTimes(1);
     const [, ctxArg] = vi.mocked(runOrchestrator).mock.calls[0];
-    expect(ctxArg).toEqual({ userMessage: "Hi", history: [], locale: null });
+    expect(ctxArg).toEqual({ userMessage: "Hi", history: [], city: null });
   });
 
   test("passes prior session history through to the orchestrator on a follow-up turn", async () => {
@@ -277,8 +268,26 @@ describe("POST /api/chat", () => {
         { role: "user", content: "What is HPV?" },
         { role: "assistant", content: "HPV stands for human papillomavirus..." },
       ],
-      locale: null,
+      city: null,
     });
+  });
+
+  test("threads body.city through to the orchestrator", async () => {
+    const fromChain = mockSupabaseChain({ historyRows: [] });
+    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    mockOrchestratorYields([{ type: "text", text: "ok" }]);
+
+    const res = await POST(
+      postRequest({
+        message: "events near me?",
+        sessionId: "c3aab8b6-3a89-4dc1-9bbb-dca08fee48f4",
+        city: "Melbourne",
+      })
+    );
+    await readNdjsonStream(res);
+
+    const [, ctxArg] = vi.mocked(runOrchestrator).mock.calls[0];
+    expect(ctxArg).toMatchObject({ city: "Melbourne" });
   });
 
   test("with a provided sessionId, reuses it (no new session insert)", async () => {

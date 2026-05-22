@@ -76,7 +76,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const NEWS_EMPTY_FALLBACK =
   "I couldn't find any recent health news right now. Try again in a bit, or ask me about cervical health topics directly.";
-const EVENTS_NEEDS_LOCATION_FALLBACK =
+export const EVENTS_NEEDS_LOCATION_FALLBACK =
   "Which city are you in? I can look up cervical health events near you.";
 const EVENTS_EMPTY_FALLBACK =
   "I couldn't find any upcoming health events for that location right now. Try a nearby city, or check back later.";
@@ -87,11 +87,11 @@ export type OrchestratorContext = {
   /** Prior conversation, oldest first. Does NOT include `userMessage`. */
   history: ChatHistoryMessage[];
   /**
-   * Optional `profiles.locale` for the signed-in user. Currently only used by
-   * the events agent as a location hint; the orchestrator threads it through
-   * but does not require it.
+   * Optional city name (resolved client-side via browser geolocation +
+   * reverse geocoding). Currently only used by the events agent as a location
+   * hint; the orchestrator threads it through but does not require it.
    */
-  locale?: string | null;
+  city?: string | null;
 };
 
 /**
@@ -109,10 +109,60 @@ export type OrchestratorContext = {
  * coordinates. Takes the auth-bound Supabase client (used by RAG); the route
  * still owns the connection.
  */
+// Looks like the user is replying with just a city name (e.g. "melbourne",
+// "New York", "Saint Petersburg"). Used to detect follow-up to the "Which
+// city are you in?" prompt — the classifier won't catch a bare city as
+// events_request. Strict: short, letters/spaces/hyphens only, at most 3 tokens.
+function looksLikeBareCity(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length === 0 || trimmed.length > 50) return false;
+  if (!/^[A-Za-z][A-Za-z\s-]*$/.test(trimmed)) return false;
+  return trimmed.split(/\s+/).length <= 3;
+}
+
+async function* dispatchEventsRequest(
+  ctx: OrchestratorContext,
+  cityOverride: string | null = null
+): AsyncIterable<AgentChunk> {
+  const { eventsContext, eventsSources, needsLocation } = await runEventsAgent({
+    userMessage: ctx.userMessage,
+    city: cityOverride ?? ctx.city ?? null,
+  });
+  if (needsLocation) {
+    yield { type: "text", text: EVENTS_NEEDS_LOCATION_FALLBACK };
+    return;
+  }
+  if (eventsSources.length === 0) {
+    yield { type: "text", text: EVENTS_EMPTY_FALLBACK };
+    return;
+  }
+  yield* runResponseAgent({
+    userMessage: ctx.userMessage,
+    history: ctx.history,
+    groundingContext: `Upcoming events:\n${eventsContext}`,
+    groundingSources: eventsSources,
+  });
+}
+
 export async function* runOrchestrator(
   supabase: SupabaseClient<Database>,
   ctx: OrchestratorContext
 ): AsyncIterable<AgentChunk> {
+  // City follow-up: the previous assistant turn was our "Which city?" prompt
+  // and the user replied with something that looks like a bare city name. The
+  // classifier won't see this as events_request (no events keywords) and the
+  // events agent's regex won't extract a location from a bare word, so we
+  // bridge the state here and route directly with the typed string as city.
+  const lastAssistant = [...ctx.history].reverse().find((m) => m.role === "assistant");
+  if (
+    lastAssistant?.content === EVENTS_NEEDS_LOCATION_FALLBACK &&
+    looksLikeBareCity(ctx.userMessage)
+  ) {
+    console.info("[orchestrator] dispatch: events_request (city follow-up)");
+    yield* dispatchEventsRequest(ctx, ctx.userMessage.trim());
+    return;
+  }
+
   const { intent } = await classifyIntent(ctx.userMessage);
   console.info(`[orchestrator] dispatch: ${intent}`);
 
@@ -152,24 +202,7 @@ export async function* runOrchestrator(
   }
 
   if (intent === "events_request") {
-    const { eventsContext, eventsSources, needsLocation } = await runEventsAgent({
-      userMessage: ctx.userMessage,
-      locale: ctx.locale,
-    });
-    if (needsLocation) {
-      yield { type: "text", text: EVENTS_NEEDS_LOCATION_FALLBACK };
-      return;
-    }
-    if (eventsSources.length === 0) {
-      yield { type: "text", text: EVENTS_EMPTY_FALLBACK };
-      return;
-    }
-    yield* runResponseAgent({
-      userMessage: ctx.userMessage,
-      history: ctx.history,
-      groundingContext: `Upcoming events:\n${eventsContext}`,
-      groundingSources: eventsSources,
-    });
+    yield* dispatchEventsRequest(ctx);
     return;
   }
 

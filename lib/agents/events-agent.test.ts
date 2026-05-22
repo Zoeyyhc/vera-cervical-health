@@ -27,8 +27,8 @@ describe("runEventsAgent", () => {
     vi.mocked(findHealthEvents).mockResolvedValue([]);
   });
 
-  test("calls findHealthEvents with caller-provided locale as location", async () => {
-    await runEventsAgent({ userMessage: "any health events?", locale: "Sydney" });
+  test("calls findHealthEvents with caller-provided city as location", async () => {
+    await runEventsAgent({ userMessage: "any health events?", city: "Sydney" });
 
     expect(findHealthEvents).toHaveBeenCalledTimes(1);
     expect(findHealthEvents).toHaveBeenCalledWith({
@@ -38,7 +38,7 @@ describe("runEventsAgent", () => {
     });
   });
 
-  test("extracts location from userMessage when locale not provided", async () => {
+  test("extracts location from userMessage when city not provided", async () => {
     await runEventsAgent({ userMessage: "screening events in Melbourne next week?" });
 
     expect(findHealthEvents).toHaveBeenCalledWith(
@@ -54,16 +54,16 @@ describe("runEventsAgent", () => {
     );
   });
 
-  test("prefers locale over a location mentioned in userMessage", async () => {
+  test("prefers city over a location mentioned in userMessage", async () => {
     await runEventsAgent({
       userMessage: "events in Melbourne?",
-      locale: "Sydney",
+      city: "Sydney",
     });
 
     expect(findHealthEvents).toHaveBeenCalledWith(expect.objectContaining({ location: "Sydney" }));
   });
 
-  test("returns needsLocation=true and empty result when neither locale nor extractable location", async () => {
+  test("returns needsLocation=true and empty result when neither city nor extractable location", async () => {
     const result = await runEventsAgent({ userMessage: "any health events soon?" });
 
     expect(findHealthEvents).not.toHaveBeenCalled();
@@ -77,7 +77,7 @@ describe("runEventsAgent", () => {
   test("returns empty result when tool returns []", async () => {
     vi.mocked(findHealthEvents).mockResolvedValue([]);
 
-    const result = await runEventsAgent({ userMessage: "x", locale: "Sydney" });
+    const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
     expect(result).toEqual({ eventsContext: "", eventsSources: [] });
     expect(result).not.toHaveProperty("needsLocation", true);
@@ -93,7 +93,7 @@ describe("runEventsAgent", () => {
       }),
     ]);
 
-    const result = await runEventsAgent({ userMessage: "x", locale: "Sydney" });
+    const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
     expect(result.eventsContext).toContain("[1]");
     expect(result.eventsContext).toContain("Women's Health Fair");
@@ -116,7 +116,7 @@ describe("runEventsAgent", () => {
       ev({ name: "C", url: "https://c.com" }),
     ]);
 
-    const result = await runEventsAgent({ userMessage: "x", locale: "Sydney" });
+    const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
     expect(result.eventsContext).toMatch(/\[1\][\s\S]*\[2\][\s\S]*\[3\]/);
     expect(result.eventsContext).toContain("\n\n");
@@ -126,7 +126,7 @@ describe("runEventsAgent", () => {
   test("includes description when present", async () => {
     vi.mocked(findHealthEvents).mockResolvedValue([ev({ description: "Free screenings and Q&A" })]);
 
-    const result = await runEventsAgent({ userMessage: "x", locale: "Sydney" });
+    const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
     expect(result.eventsContext).toContain("Free screenings and Q&A");
   });
@@ -134,7 +134,7 @@ describe("runEventsAgent", () => {
   test("omits description gracefully when null", async () => {
     vi.mocked(findHealthEvents).mockResolvedValue([ev({ description: null, name: "T" })]);
 
-    const result = await runEventsAgent({ userMessage: "x", locale: "Sydney" });
+    const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
     expect(result.eventsContext).not.toContain("null");
     expect(result.eventsContext).toContain("T");
@@ -143,7 +143,7 @@ describe("runEventsAgent", () => {
   test("uses url-keyed chunkId for citation deduplication", async () => {
     vi.mocked(findHealthEvents).mockResolvedValue([ev({ url: "https://x.com/event-42" })]);
 
-    const result = await runEventsAgent({ userMessage: "x", locale: "Sydney" });
+    const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
     expect(result.eventsSources[0].chunkId).toBe("events:https://x.com/event-42");
   });
@@ -151,14 +151,14 @@ describe("runEventsAgent", () => {
   test("never throws — degrades to empty when tool unexpectedly throws", async () => {
     vi.mocked(findHealthEvents).mockRejectedValueOnce(new Error("boom"));
 
-    await expect(runEventsAgent({ userMessage: "x", locale: "Sydney" })).resolves.toEqual({
+    await expect(runEventsAgent({ userMessage: "x", city: "Sydney" })).resolves.toEqual({
       eventsContext: "",
       eventsSources: [],
     });
   });
 
-  test("trims whitespace-only locale and falls back to extraction", async () => {
-    await runEventsAgent({ userMessage: "events in Perth", locale: "   " });
+  test("trims whitespace-only city and falls back to extraction", async () => {
+    await runEventsAgent({ userMessage: "events in Perth", city: "   " });
 
     expect(findHealthEvents).toHaveBeenCalledWith(expect.objectContaining({ location: "Perth" }));
   });

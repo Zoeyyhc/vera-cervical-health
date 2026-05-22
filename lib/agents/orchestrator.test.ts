@@ -165,7 +165,11 @@ vi.mock("@/lib/agents/events-agent", () => ({
   runEventsAgent: vi.fn(),
 }));
 
-import { type OrchestratorContext, runOrchestrator } from "./orchestrator";
+import {
+  EVENTS_NEEDS_LOCATION_FALLBACK,
+  type OrchestratorContext,
+  runOrchestrator,
+} from "./orchestrator";
 
 const fakeSupabase = {} as unknown as Parameters<typeof runOrchestrator>[0];
 
@@ -383,13 +387,13 @@ describe("runOrchestrator", () => {
       ]) as never
     );
 
-    const ctx: OrchestratorContext = { ...baseCtx, locale: "Sydney" };
+    const ctx: OrchestratorContext = { ...baseCtx, city: "Sydney" };
     const chunks = await collectOrchestrator(ctx);
 
     expect(runEventsAgent).toHaveBeenCalledTimes(1);
     expect(runEventsAgent).toHaveBeenCalledWith({
       userMessage: ctx.userMessage,
-      locale: "Sydney",
+      city: "Sydney",
     });
     expect(runResponseAgent).toHaveBeenCalledTimes(1);
     const callArg = vi.mocked(runResponseAgent).mock.calls[0][0];
@@ -423,7 +427,7 @@ describe("runOrchestrator", () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("events_request") as never);
     vi.mocked(runEventsAgent).mockResolvedValue({ eventsContext: "", eventsSources: [] });
 
-    const chunks = await collectOrchestrator({ ...baseCtx, locale: "Sydney" });
+    const chunks = await collectOrchestrator({ ...baseCtx, city: "Sydney" });
 
     expect(runResponseAgent).not.toHaveBeenCalled();
     expect(chunks).toHaveLength(1);
@@ -436,9 +440,82 @@ describe("runOrchestrator", () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("events_request") as never);
     vi.mocked(runEventsAgent).mockResolvedValue({ eventsContext: "", eventsSources: [] });
 
-    await collectOrchestrator({ ...baseCtx, locale: "Sydney" });
+    await collectOrchestrator({ ...baseCtx, city: "Sydney" });
 
     expect(runRagAgent).not.toHaveBeenCalled();
+  });
+
+  // ───── city follow-up ──────────────────────────────────────────────────
+
+  test("city follow-up: a bare city reply after the 'which city?' prompt routes straight to events_request with that city", async () => {
+    // Classifier would say general_chat for a bare 'melbourne' — orchestrator
+    // must bypass it based on history.
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("general_chat") as never);
+    const eventsContext = "[1] Cervical Screening Clinic — 2026-06-01 (Melbourne)";
+    const eventsSources = [
+      {
+        id: "1",
+        title: "Cervical Screening Clinic",
+        url: "https://example.com/ev",
+        chunkId: "events:https://example.com/ev",
+      },
+    ];
+    vi.mocked(runEventsAgent).mockResolvedValue({ eventsContext, eventsSources });
+    vi.mocked(runResponseAgent).mockReturnValue(
+      fakeAgentStream([{ type: "text", text: "Here's what I found in Melbourne..." }]) as never
+    );
+
+    const ctx: OrchestratorContext = {
+      userMessage: "melbourne",
+      history: [
+        { role: "user", content: "any events near me?" },
+        { role: "assistant", content: EVENTS_NEEDS_LOCATION_FALLBACK },
+      ],
+    };
+    await collectOrchestrator(ctx);
+
+    expect(runEventsAgent).toHaveBeenCalledTimes(1);
+    expect(runEventsAgent).toHaveBeenCalledWith({
+      userMessage: "melbourne",
+      city: "melbourne",
+    });
+    expect(runResponseAgent).toHaveBeenCalledTimes(1);
+  });
+
+  test("city follow-up: does NOT fire when the last assistant turn was something else", async () => {
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("general_chat") as never);
+    vi.mocked(runResponseAgent).mockReturnValue(
+      fakeAgentStream([{ type: "text", text: "ok" }]) as never
+    );
+
+    const ctx: OrchestratorContext = {
+      userMessage: "melbourne",
+      history: [
+        { role: "user", content: "hi" },
+        { role: "assistant", content: "Hello!" },
+      ],
+    };
+    await collectOrchestrator(ctx);
+
+    expect(runEventsAgent).not.toHaveBeenCalled();
+  });
+
+  test("city follow-up: does NOT fire when the reply doesn't look like a city (full sentence)", async () => {
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("general_chat") as never);
+    vi.mocked(runResponseAgent).mockReturnValue(
+      fakeAgentStream([{ type: "text", text: "ok" }]) as never
+    );
+
+    const ctx: OrchestratorContext = {
+      userMessage: "actually, tell me about HPV instead",
+      history: [
+        { role: "user", content: "any events near me?" },
+        { role: "assistant", content: EVENTS_NEEDS_LOCATION_FALLBACK },
+      ],
+    };
+    await collectOrchestrator(ctx);
+
+    expect(runEventsAgent).not.toHaveBeenCalled();
   });
 
   // ───── error propagation ───────────────────────────────────────────────

@@ -3,6 +3,7 @@
 import { MarkdownMessage } from "@/components/markdown-message";
 import { Button } from "@/components/ui/button";
 import { parseChatStream } from "@/lib/ai/streaming";
+import { useUserCity } from "@/lib/hooks/use-user-city";
 import type { Source } from "@/types/agents";
 import { Loader2Icon, SendIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -31,6 +32,7 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const city = useUserCity();
 
   // Auto-scroll to bottom on every messages change (covers both the optimistic
   // append and every per-token append during streaming). The body only reads
@@ -79,6 +81,7 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
         body: JSON.stringify({
           message: trimmed,
           sessionId: sessionId ?? undefined,
+          city: city ?? undefined,
         }),
       });
 

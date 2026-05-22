@@ -8,7 +8,7 @@ vi.mock("@/lib/tools/news", () => ({
 }));
 
 import { fetchHealthNews } from "@/lib/tools/news";
-import { runNewsAgent } from "./news-agent";
+import { refineNewsQuery, runNewsAgent } from "./news-agent";
 
 function article(overrides: Partial<NewsArticle> = {}): NewsArticle {
   return {
@@ -27,12 +27,12 @@ describe("runNewsAgent", () => {
     vi.mocked(fetchHealthNews).mockResolvedValue([]);
   });
 
-  test("calls fetchHealthNews with userMessage as query and max_results=5", async () => {
-    await runNewsAgent({ userMessage: "any HPV news?" });
+  test("calls fetchHealthNews with refined query and max_results=5", async () => {
+    await runNewsAgent({ userMessage: "Show me the latest cervical health news." });
 
     expect(fetchHealthNews).toHaveBeenCalledTimes(1);
     expect(fetchHealthNews).toHaveBeenCalledWith({
-      query: "any HPV news?",
+      query: "cervical health",
       max_results: 5,
     });
   });
@@ -135,5 +135,35 @@ describe("runNewsAgent", () => {
     // No crash, no literal "null" leaking into the prompt
     expect(result.newsContext).not.toContain("null");
     expect(result.newsContext).toContain("T");
+  });
+});
+
+describe("refineNewsQuery", () => {
+  test("strips conversational filler from the button prompt", () => {
+    expect(refineNewsQuery("Show me the latest cervical health news.")).toBe("cervical health");
+  });
+
+  test("strips filler from a typed natural query", () => {
+    expect(refineNewsQuery("What's the latest news on HPV?")).toBe("hpv");
+  });
+
+  test("preserves specific multi-word terms", () => {
+    expect(refineNewsQuery("HPV vaccine recall")).toBe("hpv vaccine recall");
+  });
+
+  test("preserves apostrophes inside contractions", () => {
+    expect(refineNewsQuery("Show me women's health news.")).toBe("women's health");
+  });
+
+  test("returns empty when only noise words are present (search-news falls back to domain)", () => {
+    expect(refineNewsQuery("Show me the latest news.")).toBe("");
+  });
+
+  test("handles empty input", () => {
+    expect(refineNewsQuery("")).toBe("");
+  });
+
+  test("normalises case so NewsAPI search is consistent", () => {
+    expect(refineNewsQuery("Cervical CANCER")).toBe("cervical cancer");
   });
 });

@@ -13,8 +13,8 @@ const LOCATION_HINT_RE = /\b(?:in|near|around|at)\s+([A-Z][A-Za-z]+(?:\s+[A-Z][A
 export type EventsAgentContext = {
   /** The new user turn — also used as the search query and for location extraction. */
   userMessage: string;
-  /** `profiles.locale`. Preferred over location extracted from the message. */
-  locale?: string | null;
+  /** City name from the chat client (browser geolocation → reverse geocode). Preferred over location extracted from the message. */
+  city?: string | null;
 };
 
 export type EventsAgentResult = {
@@ -43,7 +43,7 @@ export type EventsAgentResult = {
  * results into the same `{ context, sources }` envelope the RAG and News
  * agents return so downstream code is uniform.
  *
- * Location precedence: caller-provided `locale` (from `profiles.locale`) →
+ * Location precedence: caller-provided `city` (browser geolocation) →
  * naive extraction from `userMessage` → `needsLocation: true` (empty result).
  */
 export async function runEventsAgent(ctx: EventsAgentContext): Promise<EventsAgentResult> {
@@ -83,8 +83,8 @@ export async function runEventsAgent(ctx: EventsAgentContext): Promise<EventsAge
 }
 
 function resolveLocation(ctx: EventsAgentContext): string | null {
-  const fromLocale = ctx.locale?.trim();
-  if (fromLocale) return fromLocale;
+  const fromCity = ctx.city?.trim();
+  if (fromCity) return fromCity;
   const match = ctx.userMessage.match(LOCATION_HINT_RE);
   return match ? match[1].trim() : null;
 }

@@ -85,7 +85,7 @@ describe("searchNewsApi", () => {
     expect(articles).toEqual([]);
   });
 
-  it("appends fixed health-domain query base when user query is provided", async () => {
+  it("sends the user query unwrapped when provided (no implicit-AND with domain terms)", async () => {
     let capturedUrl = "";
     server.use(
       http.get(NEWSAPI_URL, ({ request }) => {
@@ -96,9 +96,10 @@ describe("searchNewsApi", () => {
     await searchNewsApi({ query: "vaccine" });
     const params = new URL(capturedUrl).searchParams;
     const q = params.get("q") ?? "";
-    expect(q).toContain("vaccine");
-    expect(q.toLowerCase()).toContain("cervical health");
-    expect(q.toLowerCase()).toContain("hpv");
+    // NewsAPI treats unquoted multi-word `q` as implicit AND, so wrapping
+    // user terms with the domain clause requires every user word + a domain
+    // match to coexist → empirically returns 0. Trust the upstream classifier.
+    expect(q).toBe("vaccine");
   });
 
   it("uses base health terms when no user query is provided", async () => {

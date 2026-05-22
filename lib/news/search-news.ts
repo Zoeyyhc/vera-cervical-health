@@ -35,7 +35,14 @@ export async function searchNewsApi({
 }: SearchNewsInput): Promise<NewsArticle[]> {
   const max = Math.min(Math.max(max_results, 1), 10);
   const userQuery = query.trim();
-  const q = userQuery ? `(${userQuery}) AND (${HEALTH_DOMAIN_BASE})` : HEALTH_DOMAIN_BASE;
+  // NewsAPI's q parameter treats unquoted multi-word strings as an implicit
+  // AND across every token, so wrapping `(user) AND (domain)` requires every
+  // user word PLUS a domain match to coexist — empirically returns 0 even
+  // for natural prompts like "latest cervical and women's health news".
+  // Trust the upstream classifier to route only news_request here; pass the
+  // user query through unwrapped, fall back to the broad domain query when
+  // empty.
+  const q = userQuery || HEALTH_DOMAIN_BASE;
 
   const from = isoDateNDaysAgo(WINDOW_DAYS);
 
