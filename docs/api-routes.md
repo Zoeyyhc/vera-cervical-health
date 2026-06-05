@@ -75,6 +75,11 @@ All route handlers are in `app/api/` using Next.js App Router conventions (`rout
 **Process:** Mine `rag_gap` events → search authoritative sources → score + extract + dedup → stage `pending` rows in `knowledge_candidates` for admin review. Bounded per run by `MAX_CANDIDATES_PER_RUN` and `RUN_BUDGET_MS`.  
 **Response:** `{ gapsProcessed: number, candidatesStaged: number }`
 
+### `/admin/knowledge` (page, not an API route)
+
+**Auth:** `admin` role (server-side gate via `requireAdmin`, enforced in `app/(app)/admin/layout.tsx`).  
+**Purpose:** Review queue for pending `knowledge_candidates`. **Approve** → server action `approveCandidate` ingests the content into `knowledge_chunks` via `ingestDocument` and marks the row `approved`. **Reject** → `rejectCandidate` marks it `rejected`. **Run discovery now** → calls `GET /api/embeddings/discover`.
+
 ### `POST /api/analytics/event`
 
 **Auth:** `user` role  
