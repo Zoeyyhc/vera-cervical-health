@@ -77,6 +77,7 @@ import { runEventsAgent } from "@/lib/agents/events-agent";
 import { runNewsAgent } from "@/lib/agents/news-agent";
 import { runRagAgent } from "@/lib/agents/rag-agent";
 import { type AgentChunk, runResponseAgent } from "@/lib/agents/response-agent";
+import { recordAbuseEvent } from "@/lib/ai/abuse";
 import type { ChatHistoryMessage } from "@/lib/ai/context-window";
 import type { Database } from "@/types/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -87,6 +88,8 @@ export const EVENTS_NEEDS_LOCATION_FALLBACK =
   "Which city are you in? I can look up cervical health events near you.";
 const EVENTS_EMPTY_FALLBACK =
   "I couldn't find any upcoming health events for that location right now. Try a nearby city, or check back later.";
+export const INJECTION_REFUSAL =
+  "I can only help with cervical health education, and I can't follow instructions that change how I work. But I'm happy to answer questions about HPV, screening, vaccination, or related topics — what would you like to know?";
 
 export type OrchestratorContext = {
   /** The new user turn. Same shape as the response agent's ctx. */
@@ -172,6 +175,12 @@ export async function* runOrchestrator(
 
   const { intent } = await classifyIntent(ctx.userMessage);
   console.info(`[orchestrator] dispatch: ${intent}`);
+
+  if (intent === "injection_attempt") {
+    await recordAbuseEvent({ type: "injection_attempt", messageExcerpt: ctx.userMessage });
+    yield { type: "text", text: INJECTION_REFUSAL };
+    return;
+  }
 
   if (intent === "health_question") {
     const { ragContext, ragSources } = await runRagAgent(supabase, {
