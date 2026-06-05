@@ -8,6 +8,7 @@ process.env.OPENAI_API_KEY ||= "test-openai-key";
 process.env.RESEND_API_KEY ||= "test-resend-key";
 process.env.NEWS_API_KEY ||= "test-news-api-key";
 process.env.SERPAPI_KEY ||= "test-serpapi-key";
+process.env.CRON_SECRET ||= "test-cron-secret";
 process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ||= "test-google-maps-key";
 process.env.NEXT_PUBLIC_SUPABASE_URL ||= "http://127.0.0.1:54321";
 

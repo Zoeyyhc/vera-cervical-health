@@ -38,6 +38,9 @@ export const env = {
   // SerpAPI — proxied through /api/events, never exposed to the browser
   serpapiKey: requireEnv("SERPAPI_KEY"),
 
+  // Vercel Cron — bearer token the cron trigger sends on GET /api/embeddings/discover.
+  cronSecret: requireEnv("CRON_SECRET"),
+
   // Google Maps / Places — same key powers the browser map (EPIC5-06) and the
   // server-side Places API (New) Text Search call from /api/clinics/search.
   // NEXT_PUBLIC_ because the Maps JS SDK reads it in the browser; on the server
