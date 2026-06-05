@@ -37,3 +37,8 @@ next-env.d.ts
 
 # Brainstorm session files
 .superpowers/
+docs/superpowers/
+
+# Local Supabase stack and interview files
+supabase/
+interview/
