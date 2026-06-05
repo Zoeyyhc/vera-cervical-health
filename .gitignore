@@ -39,6 +39,7 @@ next-env.d.ts
 .superpowers/
 docs/superpowers/
 
-# Local Supabase stack and interview files
-supabase/
+# Local Supabase runtime artifacts (keep migrations, config, and seed tracked)
+supabase/.branches/
+supabase/.temp/
 interview/

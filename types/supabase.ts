@@ -184,6 +184,95 @@ export type Database = {
           },
         ]
       }
+      discovery_runs: {
+        Row: {
+          candidates_staged: number
+          finished_at: string | null
+          gaps_processed: number
+          id: string
+          started_at: string
+          status: string
+          trigger: string
+        }
+        Insert: {
+          candidates_staged?: number
+          finished_at?: string | null
+          gaps_processed?: number
+          id?: string
+          started_at?: string
+          status?: string
+          trigger: string
+        }
+        Update: {
+          candidates_staged?: number
+          finished_at?: string | null
+          gaps_processed?: number
+          id?: string
+          started_at?: string
+          status?: string
+          trigger?: string
+        }
+        Relationships: []
+      }
+      knowledge_candidates: {
+        Row: {
+          authority_score: number | null
+          content_hash: string
+          created_at: string
+          domain_tags: string[]
+          gap_refs: Json
+          id: string
+          raw_content: string
+          relevance_score: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_url: string
+          status: string
+          summary: string | null
+          title: string | null
+        }
+        Insert: {
+          authority_score?: number | null
+          content_hash: string
+          created_at?: string
+          domain_tags?: string[]
+          gap_refs?: Json
+          id?: string
+          raw_content: string
+          relevance_score?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_url: string
+          status?: string
+          summary?: string | null
+          title?: string | null
+        }
+        Update: {
+          authority_score?: number | null
+          content_hash?: string
+          created_at?: string
+          domain_tags?: string[]
+          gap_refs?: Json
+          id?: string
+          raw_content?: string
+          relevance_score?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_url?: string
+          status?: string
+          summary?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_candidates_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_chunks: {
         Row: {
           content: string
