@@ -19,14 +19,18 @@ describe("scoreAuthority", () => {
   });
 
   test("allowlisted host floors authority at 0.95, keeps LLM relevance", async () => {
-    vi.mocked(runDiscoveryLlm).mockResolvedValue(JSON.stringify({ authority: 0.4, relevance: 0.8 }));
+    vi.mocked(runDiscoveryLlm).mockResolvedValue(
+      JSON.stringify({ authority: 0.4, relevance: 0.8 })
+    );
     const s = await scoreAuthority(result("https://www.who.int/hpv"));
     expect(s.authorityScore).toBe(0.95);
     expect(s.relevanceScore).toBe(0.8);
   });
 
   test("non-listed host uses LLM authority + relevance", async () => {
-    vi.mocked(runDiscoveryLlm).mockResolvedValue(JSON.stringify({ authority: 0.7, relevance: 0.6 }));
+    vi.mocked(runDiscoveryLlm).mockResolvedValue(
+      JSON.stringify({ authority: 0.7, relevance: 0.6 })
+    );
     const s = await scoreAuthority(result("https://someclinic.example/hpv"));
     expect(s).toEqual({ authorityScore: 0.7, relevanceScore: 0.6 });
   });

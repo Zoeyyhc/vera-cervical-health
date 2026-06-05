@@ -44,7 +44,11 @@ export async function mineGaps(supabaseAdmin: SupabaseClient<Database>): Promise
 
   if (fresh.length === 0) return [];
 
-  const raw = await runDiscoveryLlm(CLUSTER_GAPS_PROMPT, JSON.stringify(fresh), "discovery.cluster");
+  const raw = await runDiscoveryLlm(
+    CLUSTER_GAPS_PROMPT,
+    JSON.stringify(fresh),
+    "discovery.cluster"
+  );
 
   let parsed: unknown;
   try {

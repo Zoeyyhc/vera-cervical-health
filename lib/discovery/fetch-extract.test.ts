@@ -29,7 +29,7 @@ describe("fetchAndExtract", () => {
   });
 
   test("falls back to <main>, then <body>, when no <article>", async () => {
-    const body = `<main><p>Main content here.</p></main>`;
+    const body = "<main><p>Main content here.</p></main>";
     vi.spyOn(global, "fetch").mockResolvedValue(new Response(html(body), { status: 200 }));
     const page = await fetchAndExtract("https://cdc.gov/x");
     expect(page?.content).toContain("Main content here.");

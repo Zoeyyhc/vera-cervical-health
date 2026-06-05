@@ -15,10 +15,7 @@ describe("synthesizeQueries", () => {
       JSON.stringify(["hpv vaccine schedule guidelines", "hpv vaccine age recommendations"])
     );
     const out = await synthesizeQueries({ theme: "HPV vaccine", gapEventIds: ["g1"] });
-    expect(out).toEqual([
-      "hpv vaccine schedule guidelines",
-      "hpv vaccine age recommendations",
-    ]);
+    expect(out).toEqual(["hpv vaccine schedule guidelines", "hpv vaccine age recommendations"]);
   });
 
   test("returns [] for an empty array (off-domain topic)", async () => {
