@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/embeddings/discover",
+      "schedule": "0 3 */3 * *"
+    }
+  ]
+}

@@ -68,6 +68,13 @@ All route handlers are in `app/api/` using Next.js App Router conventions (`rout
 **Process:** Extract text → chunk (512 tokens, 64-token overlap) → embed → upsert into `knowledge_chunks`  
 **Response:** `{ chunks_created: number }`
 
+### `GET /api/embeddings/discover`
+
+**Auth:** Vercel Cron bearer (`Authorization: Bearer ${CRON_SECRET}` → trigger `cron`) **or** an `admin` session (→ trigger `manual`). 401 if neither; 403 for a non-admin session.  
+**Schedule:** Vercel Cron every 3 days (`0 3 */3 * *`, UTC — see `vercel.json`).  
+**Process:** Mine `rag_gap` events → search authoritative sources → score + extract + dedup → stage `pending` rows in `knowledge_candidates` for admin review. Bounded per run by `MAX_CANDIDATES_PER_RUN` and `RUN_BUDGET_MS`.  
+**Response:** `{ gapsProcessed: number, candidatesStaged: number }`
+
 ### `POST /api/analytics/event`
 
 **Auth:** `user` role  
