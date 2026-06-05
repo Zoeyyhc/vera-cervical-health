@@ -5,7 +5,12 @@
  * - `news_request` / `events_request` → external-tool agents (Epic 9)
  * - `general_chat` → response agent directly
  */
-export type Intent = "health_question" | "news_request" | "events_request" | "general_chat";
+export type Intent =
+  | "health_question"
+  | "news_request"
+  | "events_request"
+  | "general_chat"
+  | "injection_attempt";
 
 /**
  * One citation attached to an assistant message. Populated by the RAG agent

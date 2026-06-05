@@ -8,6 +8,7 @@ const VALID_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
   "news_request",
   "events_request",
   "general_chat",
+  "injection_attempt",
 ]);
 
 const NEWS_RE = /\b(news|latest|recent updates?|articles?|headlines?)\b/i;
