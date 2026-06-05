@@ -79,6 +79,7 @@ import { runRagAgent } from "@/lib/agents/rag-agent";
 import { type AgentChunk, runResponseAgent } from "@/lib/agents/response-agent";
 import { recordAbuseEvent } from "@/lib/ai/abuse";
 import type { ChatHistoryMessage } from "@/lib/ai/context-window";
+import { GAP_THRESHOLD, recordRagGap } from "@/lib/ai/rag-gap";
 import type { Database } from "@/types/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -183,15 +184,13 @@ export async function* runOrchestrator(
   }
 
   if (intent === "health_question") {
-    const { ragContext, ragSources } = await runRagAgent(supabase, {
+    const { ragContext, ragSources, topScore } = await runRagAgent(supabase, {
       userMessage: ctx.userMessage,
     });
-    if (ragSources.length === 0) {
-      // Operational signal for tuning the 0.75 similarity threshold once the
-      // KB grows past the seed. Truncate to 80 chars to keep PII risk low.
-      console.info(
-        `[orchestrator] health_question returned 0 chunks for query: ${ctx.userMessage.slice(0, 80)}`
-      );
+    if (topScore < GAP_THRESHOLD) {
+      // Coverage gap — feeds the knowledge discovery pipeline. topScore is 0
+      // when nothing matched, so this also covers the zero-result case.
+      await recordRagGap({ question: ctx.userMessage, topScore });
     }
     yield* runResponseAgent({
       userMessage: ctx.userMessage,

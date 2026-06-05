@@ -195,7 +195,13 @@ vi.mock("@/lib/ai/abuse", () => ({
   recordAbuseEvent: vi.fn(),
 }));
 
+vi.mock("@/lib/ai/rag-gap", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ai/rag-gap")>();
+  return { ...actual, recordRagGap: vi.fn() };
+});
+
 import { recordAbuseEvent } from "@/lib/ai/abuse";
+import { recordRagGap } from "@/lib/ai/rag-gap";
 import {
   EVENTS_NEEDS_LOCATION_FALLBACK,
   INJECTION_REFUSAL,
@@ -278,7 +284,7 @@ describe("runOrchestrator", () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("health_question") as never);
     const ragContext = "[1] (Source A) HPV is a common virus.";
     const ragSources = [{ id: "1", title: "Source A", chunkId: "uuid-1" }];
-    vi.mocked(runRagAgent).mockResolvedValue({ ragContext, ragSources });
+    vi.mocked(runRagAgent).mockResolvedValue({ ragContext, ragSources, topScore: 0.6 });
     vi.mocked(runResponseAgent).mockReturnValue(
       fakeAgentStream([
         { type: "text", text: "HPV is..." },
@@ -307,7 +313,7 @@ describe("runOrchestrator", () => {
 
   test("health_question with empty RAG result: still calls response agent with empty grounding fields", async () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("health_question") as never);
-    vi.mocked(runRagAgent).mockResolvedValue({ ragContext: "", ragSources: [] });
+    vi.mocked(runRagAgent).mockResolvedValue({ ragContext: "", ragSources: [], topScore: 0 });
     vi.mocked(runResponseAgent).mockReturnValue(
       fakeAgentStream([{ type: "text", text: "I don't have specific info..." }]) as never
     );
@@ -322,41 +328,40 @@ describe("runOrchestrator", () => {
     });
   });
 
-  test("health_question with zero chunks: logs an operational warning for threshold tuning", async () => {
-    const consoleInfoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
-    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("health_question") as never);
-    vi.mocked(runRagAgent).mockResolvedValue({ ragContext: "", ragSources: [] });
-    vi.mocked(runResponseAgent).mockReturnValue(
-      fakeAgentStream([{ type: "text", text: "ok" }]) as never
-    );
-
-    await collectOrchestrator(baseCtx);
-
-    expect(consoleInfoSpy).toHaveBeenCalledWith(
-      expect.stringContaining("health_question returned 0 chunks")
-    );
-    consoleInfoSpy.mockRestore();
-  });
-
-  test("health_question with non-zero chunks: does NOT log the zero-chunk warning", async () => {
-    const consoleInfoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+  test("health_question: records a rag_gap when topScore is below 0.52", async () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("health_question") as never);
     vi.mocked(runRagAgent).mockResolvedValue({
-      ragContext: "ctx",
-      ragSources: [{ id: "1", title: "WHO", chunkId: "c1" }],
+      ragContext: "",
+      ragSources: [],
+      topScore: 0.3,
     });
     vi.mocked(runResponseAgent).mockReturnValue(
       fakeAgentStream([{ type: "text", text: "ok" }]) as never
     );
 
-    await collectOrchestrator(baseCtx);
+    await collectOrchestrator({ userMessage: "an obscure question", history: [] });
 
-    // The dispatch log uses `console.info` too, so filter by the specific message.
-    const zeroChunkLogs = consoleInfoSpy.mock.calls.filter(
-      (args) => typeof args[0] === "string" && args[0].includes("returned 0 chunks")
+    expect(recordRagGap).toHaveBeenCalledTimes(1);
+    expect(recordRagGap).toHaveBeenCalledWith({
+      question: "an obscure question",
+      topScore: 0.3,
+    });
+  });
+
+  test("health_question: does NOT record a rag_gap when topScore meets 0.52", async () => {
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("health_question") as never);
+    vi.mocked(runRagAgent).mockResolvedValue({
+      ragContext: "[1] (A) HPV is common.",
+      ragSources: [{ id: "1", title: "A", chunkId: "c1" }],
+      topScore: 0.6,
+    });
+    vi.mocked(runResponseAgent).mockReturnValue(
+      fakeAgentStream([{ type: "text", text: "ok" }]) as never
     );
-    expect(zeroChunkLogs).toHaveLength(0);
-    consoleInfoSpy.mockRestore();
+
+    await collectOrchestrator({ userMessage: "What is HPV?", history: [] });
+
+    expect(recordRagGap).not.toHaveBeenCalled();
   });
 
   // ───── news_request ───────────────────────────────────────────────────
