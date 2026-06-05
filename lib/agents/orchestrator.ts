@@ -13,6 +13,11 @@ const VALID_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
 
 const NEWS_RE = /\b(news|latest|recent updates?|articles?|headlines?)\b/i;
 const EVENTS_RE = /\b(events?|meetups?|conferences?|near me)\b/i;
+// Heuristic backstop for jailbreak phrasing — only consulted when the
+// classifier call itself fails (Claude error). Accepts misses; the classifier
+// is the primary signal. Covers the highest-frequency English patterns.
+const INJECTION_RE =
+  /\b(ignore|disregard|forget)\b.{0,20}\b(all |the )?(previous|above|prior|earlier)\b.{0,20}\binstructions?\b|\byou are now\b|\bsystem prompt\b|\bpretend (you|to be)\b|\bact as (an?|the)\b/i;
 
 export type ClassifyResult = {
   intent: Intent;
@@ -59,6 +64,7 @@ export async function classifyIntent(userMessage: string): Promise<ClassifyResul
 }
 
 function fallbackIntent(message: string): Intent {
+  if (INJECTION_RE.test(message)) return "injection_attempt";
   if (NEWS_RE.test(message)) return "news_request";
   if (EVENTS_RE.test(message)) return "events_request";
   // No keyword for health_question — too easy to over-fire on common health
