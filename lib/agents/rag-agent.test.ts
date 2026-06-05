@@ -52,7 +52,26 @@ describe("runRagAgent", () => {
 
     const result = await runRagAgent(fakeSupabase, { userMessage: "anything" });
 
-    expect(result).toEqual({ ragContext: "", ragSources: [] });
+    expect(result).toEqual({ ragContext: "", ragSources: [], topScore: 0 });
+  });
+
+  test("returns topScore 0 when no chunks match", async () => {
+    vi.mocked(retrieveChunks).mockResolvedValue([]);
+
+    const result = await runRagAgent(fakeSupabase, { userMessage: "anything" });
+
+    expect(result.topScore).toBe(0);
+  });
+
+  test("returns topScore equal to the first (highest) chunk's similarity", async () => {
+    vi.mocked(retrieveChunks).mockResolvedValue([
+      chunk({ id: "u1", similarityScore: 0.61 }),
+      chunk({ id: "u2", similarityScore: 0.48 }),
+    ]);
+
+    const result = await runRagAgent(fakeSupabase, { userMessage: "anything" });
+
+    expect(result.topScore).toBe(0.61);
   });
 
   test("formats a single chunk with a [1] marker and source attribution", async () => {

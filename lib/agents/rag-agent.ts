@@ -25,6 +25,12 @@ export type RagAgentResult = {
    * `knowledge_chunks.id`.
    */
   ragSources: Source[];
+  /**
+   * Highest cosine similarity among retrieved chunks (retrieve.ts orders
+   * closest-first, so this is chunks[0]). 0 when nothing matched. Consumed by
+   * the orchestrator to detect coverage gaps.
+   */
+  topScore: number;
 };
 
 /**
@@ -44,13 +50,13 @@ export async function runRagAgent(
   const chunks = await retrieveChunks(supabase, embedding);
 
   if (chunks.length === 0) {
-    return { ragContext: "", ragSources: [] };
+    return { ragContext: "", ragSources: [], topScore: 0 };
   }
 
   const ragSources: Source[] = chunks.map((c, i) => buildSource(c, i + 1));
   const ragContext = chunks.map((c, i) => formatChunk(c, i + 1)).join("\n\n");
 
-  return { ragContext, ragSources };
+  return { ragContext, ragSources, topScore: chunks[0].similarityScore };
 }
 
 function buildSource(chunk: RetrievedChunk, marker: number): Source {
