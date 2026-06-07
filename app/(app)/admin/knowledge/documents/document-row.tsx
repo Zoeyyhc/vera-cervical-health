@@ -33,7 +33,7 @@ export function DocumentRow({ doc }: { doc: KnowledgeDocument }) {
         <p className="truncate text-sm font-medium text-charcoal">{label}</p>
         <p className="truncate text-xs text-muted-gray">
           {doc.source ?? "(no source)"} · {doc.chunkCount} chunk{doc.chunkCount === 1 ? "" : "s"} ·{" "}
-          {new Date(doc.createdAt).toLocaleDateString()}
+          {doc.createdAt.slice(0, 10)}
         </p>
       </div>
       <Button type="button" variant="outline" disabled={pending} onClick={onDelete}>
