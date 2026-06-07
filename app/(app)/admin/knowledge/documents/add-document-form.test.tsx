@@ -17,8 +17,12 @@ describe("AddDocumentForm", () => {
     vi.mocked(addDocument).mockResolvedValue({ chunksCreated: 4 });
     render(<AddDocumentForm />);
 
-    fireEvent.change(screen.getByLabelText(/document name/i), { target: { value: "Cervical basics" } });
-    fireEvent.change(screen.getByLabelText(/document content/i), { target: { value: "Some text" } });
+    fireEvent.change(screen.getByLabelText(/document name/i), {
+      target: { value: "Cervical basics" },
+    });
+    fireEvent.change(screen.getByLabelText(/document content/i), {
+      target: { value: "Some text" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /add to knowledge base/i }));
 
     await waitFor(() => expect(toast.success).toHaveBeenCalled());

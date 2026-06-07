@@ -8,7 +8,12 @@ describe("listKnowledgeDocuments", () => {
 
   test("calls the RPC and maps rows to KnowledgeDocument", async () => {
     const rows = [
-      { source: "who.int/hpv", title: "HPV", chunk_count: 8, created_at: "2026-05-01T00:00:00.000Z" },
+      {
+        source: "who.int/hpv",
+        title: "HPV",
+        chunk_count: 8,
+        created_at: "2026-05-01T00:00:00.000Z",
+      },
       { source: null, title: null, chunk_count: 2, created_at: "2026-04-01T00:00:00.000Z" },
     ];
     const rpc = vi.fn().mockResolvedValue({ data: rows, error: null });

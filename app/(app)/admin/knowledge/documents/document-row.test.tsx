@@ -10,7 +10,12 @@ import { deleteDocument } from "@/lib/rag/document-actions";
 import { toast } from "sonner";
 import { DocumentRow } from "./document-row";
 
-const doc = { source: "who.int/hpv", title: "HPV", chunkCount: 8, createdAt: "2026-05-01T00:00:00.000Z" };
+const doc = {
+  source: "who.int/hpv",
+  title: "HPV",
+  chunkCount: 8,
+  createdAt: "2026-05-01T00:00:00.000Z",
+};
 
 describe("DocumentRow", () => {
   beforeEach(() => vi.clearAllMocks());

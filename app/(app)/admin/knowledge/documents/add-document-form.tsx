@@ -30,7 +30,10 @@ export function AddDocumentForm() {
     "w-full rounded border border-[#eceae4] bg-cream px-3 py-2 text-sm text-charcoal placeholder:text-muted-gray";
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3 rounded-lg border border-[#eceae4] bg-[#fcfbf8] p-5">
+    <form
+      onSubmit={onSubmit}
+      className="space-y-3 rounded-lg border border-[#eceae4] bg-[#fcfbf8] p-5"
+    >
       <h2 className="text-lg font-medium text-charcoal">Add a document</h2>
       <input
         aria-label="Document name"
