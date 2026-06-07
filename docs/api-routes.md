@@ -80,6 +80,11 @@ All route handlers are in `app/api/` using Next.js App Router conventions (`rout
 **Auth:** `admin` role (server-side gate via `requireAdmin`, enforced in `app/(app)/admin/layout.tsx`).  
 **Purpose:** Review queue for pending `knowledge_candidates`. **Approve** → server action `approveCandidate` ingests the content into `knowledge_chunks` via `ingestDocument` and marks the row `approved`. **Reject** → `rejectCandidate` marks it `rejected`. **Run discovery now** → calls `GET /api/embeddings/discover`.
 
+### `/admin/knowledge/documents` (page, not an API route)
+
+**Auth:** `admin` role (server-side gate via `requireAdmin`, enforced in `app/(app)/admin/layout.tsx`).
+**Purpose:** Manage the documents in `knowledge_chunks` directly. **Lists** every document (one row per `source`, via the `list_knowledge_documents()` RPC). **Add** — server action `addDocument` chunks + embeds pasted text via `ingestDocument` (`source` = the typed name, `metadata.origin = "manual"`). **Delete** — server action `deleteDocument` hard-deletes all chunks for a `source`. Covers seed, discovery-approved, and manually-added documents alike.
+
 ### `POST /api/analytics/event`
 
 **Auth:** `user` role  

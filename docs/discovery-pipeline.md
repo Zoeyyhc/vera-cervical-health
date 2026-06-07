@@ -173,6 +173,10 @@ Tables: `knowledge_candidates` (staging), `discovery_runs` (run log), and
 - **Tuning:** all knobs live in `lib/discovery/constants.ts` and
   `lib/ai/rag-gap.ts` (`GAP_THRESHOLD`). Lower `GAP_THRESHOLD` = stricter gap
   detection (fewer gaps); raise it = more.
+- **Deleting a discovered document** (via `/admin/knowledge/documents`) removes
+  its chunks but leaves the `knowledge_candidates` row `approved`. Because the
+  content is gone from the KB, the 0.90 dedup no longer matches it, so a future
+  run may re-discover and re-queue it. That is expected.
 
 ## Not built (possible future work)
 
