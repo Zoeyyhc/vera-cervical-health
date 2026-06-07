@@ -257,6 +257,7 @@ Required external accounts for full local dev: Supabase, Anthropic, OpenAI, Goog
 | File | Contents |
 |---|---|
 | `docs/architecture.md` | Agent pipeline, RAG flow, tool call chain |
+| `docs/discovery-pipeline.md` | Gap-driven knowledge discovery: rag_gap capture, stages, thresholds, triggers |
 | `docs/database.md` | Full schema reference, RLS roles, pgvector setup |
 | `docs/api-routes.md` | All API routes with auth requirements |
 | `docs/env-vars.md` | All environment variables with provider links |

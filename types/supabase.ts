@@ -429,6 +429,15 @@ export type Database = {
     }
     Functions: {
       is_admin: { Args: never; Returns: boolean }
+      list_knowledge_documents: {
+        Args: never
+        Returns: {
+          chunk_count: number
+          created_at: string
+          source: string
+          title: string
+        }[]
+      }
       match_knowledge_chunks: {
         Args: {
           match_count: number

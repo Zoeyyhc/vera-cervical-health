@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { listPendingCandidates } from "@/lib/discovery/candidates";
+import Link from "next/link";
 import { CandidateCard } from "./candidate-card";
 import { RunDiscoveryButton } from "./run-discovery-button";
 
@@ -20,7 +21,12 @@ export default async function KnowledgeReviewPage() {
               {candidates.length} pending candidate{candidates.length === 1 ? "" : "s"}
             </p>
           </div>
-          <RunDiscoveryButton />
+          <div className="flex items-center gap-3">
+            <Link href="/admin/knowledge/documents" className="text-sm text-charcoal underline">
+              Manage documents →
+            </Link>
+            <RunDiscoveryButton />
+          </div>
         </header>
 
         {candidates.length === 0 ? (
