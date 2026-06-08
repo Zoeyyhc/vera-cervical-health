@@ -1,16 +1,24 @@
 "use client";
 
-import { MarkdownMessage } from "@/components/markdown-message";
 import { Button } from "@/components/ui/button";
 import { parseChatStream } from "@/lib/ai/streaming";
 import { useUserCity } from "@/lib/hooks/use-user-city";
 import type { Source } from "@/types/agents";
 import { Loader2Icon, SendIcon } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CitationChips } from "./citation-chips";
 import { EmptyState } from "./empty-state";
+
+// react-markdown + remark-gfm + rehype-sanitize is sizeable and isn't needed
+// until the first assistant message renders, so keep it out of the initial
+// chat bundle. ssr:false is safe — assistant content is client-rendered anyway.
+const MarkdownMessage = dynamic(
+  () => import("@/components/markdown-message").then((m) => m.MarkdownMessage),
+  { ssr: false }
+);
 
 export type ChatMessage = {
   id: string;

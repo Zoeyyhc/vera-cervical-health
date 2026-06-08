@@ -4,12 +4,19 @@ import { ClinicEmptyState } from "@/components/clinics/clinic-empty-state";
 import { ClinicErrorState } from "@/components/clinics/clinic-error-state";
 import { ClinicList } from "@/components/clinics/clinic-list";
 import { ClinicLoadingSkeleton } from "@/components/clinics/clinic-loading-skeleton";
-import { ClinicMap } from "@/components/clinics/clinic-map";
 import { ClinicSearchBar } from "@/components/clinics/clinic-search-bar";
 import { type LatLng, haversineMeters } from "@/lib/utils/geo";
 import type { ClinicResult } from "@/types/clinic";
 import { List as ListIcon, Map as MapIcon } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+
+// The Google Maps stack (@vis.gl/react-google-maps + Google's JS API) is heavy
+// and the page defaults to the list view, so load the map only when it renders.
+const ClinicMap = dynamic(
+  () => import("@/components/clinics/clinic-map").then((m) => m.ClinicMap),
+  { ssr: false, loading: () => <ClinicLoadingSkeleton /> }
+);
 
 type Status = "idle" | "loading" | "ok" | "empty" | "error";
 

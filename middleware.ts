@@ -1,9 +1,21 @@
-import { decideRedirect, isAdminPath } from "@/lib/auth/route-rules";
+import { decideRedirect, isAdminPath, isAuthPage, isProtected } from "@/lib/auth/route-rules";
 import type { Database } from "@/types/supabase";
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  // Fast path: only protected routes and auth pages have an auth-dependent
+  // redirect rule. For everything else (/, /learn/*, and /api/* — which run
+  // their own getUser() guards in the route handler) decideRedirect() returns
+  // "allow" regardless of auth state, so the result is identical without the
+  // getUser() network round-trip to GoTrue. This skips that latency on the
+  // public pages and removes a redundant second getUser() on every API call.
+  if (!isProtected(pathname) && !isAuthPage(pathname)) {
+    return NextResponse.next({ request });
+  }
+
   // supabaseResponse must be returned so cookie mutations from setAll() reach the browser.
   let supabaseResponse = NextResponse.next({ request });
 
@@ -34,8 +46,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const pathname = request.nextUrl.pathname;
 
   // Only query profiles.role when actually needed (admin gate).
   let isAdmin = false;
