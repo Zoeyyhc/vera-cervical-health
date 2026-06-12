@@ -51,4 +51,20 @@ describe("CitationChips", () => {
     // But the chip still appears with the marker
     expect(screen.getByText(/\[1\]/)).toBeInTheDocument();
   });
+
+  it("sets a stable scroll-target id on each chip when messageId is given", () => {
+    const sources: Source[] = [
+      { id: "1", title: "Source A", url: "https://a.com", chunkId: "c1" },
+      { id: "2", title: "Source B", chunkId: "c2" },
+    ];
+    const { container } = render(<CitationChips sources={sources} messageId="m1" />);
+    expect(container.querySelector("#cite-m1-1")).not.toBeNull();
+    expect(container.querySelector("#cite-m1-2")).not.toBeNull();
+  });
+
+  it("omits ids when messageId is absent", () => {
+    const sources: Source[] = [{ id: "1", title: "Source A", url: "https://a.com", chunkId: "c1" }];
+    const { container } = render(<CitationChips sources={sources} />);
+    expect(container.querySelector("[id^='cite-']")).toBeNull();
+  });
 });

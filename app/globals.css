@@ -346,3 +346,17 @@
 .fade-up {
   animation: fadeUp 400ms ease-out both;
 }
+
+/* Transient highlight when an inline citation scrolls to its bottom-list entry. */
+.cite-highlight {
+  animation: cite-pulse 1.5s ease-out;
+}
+
+@keyframes cite-pulse {
+  0% {
+    box-shadow: 0 0 0 3px rgba(28, 28, 28, 0.25);
+  }
+  100% {
+    box-shadow: 0 0 0 3px rgba(28, 28, 28, 0);
+  }
+}

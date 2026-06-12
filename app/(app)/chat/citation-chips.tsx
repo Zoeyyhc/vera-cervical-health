@@ -6,6 +6,8 @@ export const CITATION_CHIP_CLASS =
 
 type Props = {
   sources: Source[] | null | undefined;
+  /** When set, each chip gets id `cite-${messageId}-${n}` as a scroll target. */
+  messageId?: string;
 };
 
 /**
@@ -14,7 +16,7 @@ type Props = {
  * those without render as a non-clickable `<span>`. Returns null when there
  * are no sources to render.
  */
-export function CitationChips({ sources }: Props) {
+export function CitationChips({ sources, messageId }: Props) {
   if (!sources || sources.length === 0) return null;
 
   return (
@@ -22,10 +24,12 @@ export function CitationChips({ sources }: Props) {
       {sources.map((s, i) => {
         const number = i + 1;
         const label = `[${number}]`;
+        const id = messageId ? `cite-${messageId}-${number}` : undefined;
         if (s.url) {
           return (
             <a
               key={s.id}
+              id={id}
               href={s.url}
               target="_blank"
               rel="noopener noreferrer"
@@ -39,6 +43,7 @@ export function CitationChips({ sources }: Props) {
         return (
           <span
             key={s.id}
+            id={id}
             title={s.title}
             className={`${CITATION_CHIP_CLASS} text-muted-gray cursor-default`}
           >
