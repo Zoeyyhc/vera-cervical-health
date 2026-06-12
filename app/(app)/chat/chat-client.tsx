@@ -218,7 +218,11 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           {renderBody()}
         </div>
         {message.role === "assistant" && (
-          <CitationChips sources={message.sources} messageId={message.id} />
+          <CitationChips
+            sources={message.sources}
+            messageId={message.id}
+            content={message.content}
+          />
         )}
       </div>
     </div>
