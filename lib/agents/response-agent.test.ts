@@ -193,6 +193,35 @@ describe("runResponseAgent", () => {
     expect(args[0].system).not.toContain("Retrieved context:");
   });
 
+  test("appends the citation instruction when groundingContext is present", async () => {
+    const anthropic = mockAnthropic({
+      events: [{ type: "content_block_delta", delta: { type: "text_delta", text: "ok" } }],
+    });
+    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
+
+    await collect(
+      runResponseAgent({
+        userMessage: "Hi",
+        history: [],
+        groundingContext: "[1] HPV is a virus.",
+      })
+    );
+    const args = anthropic.messages.stream.mock.calls[0] as unknown as [{ system: string }];
+    expect(args[0].system).toContain("append the corresponding marker");
+  });
+
+  test("does NOT append the citation instruction for ungrounded turns", async () => {
+    const anthropic = mockAnthropic({
+      events: [{ type: "content_block_delta", delta: { type: "text_delta", text: "ok" } }],
+    });
+    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
+
+    await collect(runResponseAgent({ userMessage: "Hi", history: [] }));
+    const args = anthropic.messages.stream.mock.calls[0] as unknown as [{ system: string }];
+    expect(args[0].system).toBe(DEFAULT_SYSTEM_PROMPT);
+    expect(args[0].system).not.toContain("append the corresponding marker");
+  });
+
   test("propagates errors thrown during streaming", async () => {
     const anthropic = mockAnthropic({
       events: [{ type: "content_block_delta", delta: { type: "text_delta", text: "partial" } }],

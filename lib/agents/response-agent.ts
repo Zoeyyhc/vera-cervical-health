@@ -1,7 +1,7 @@
 import { CLAUDE_MODEL } from "@/lib/ai/anthropic";
 import type { ChatHistoryMessage } from "@/lib/ai/context-window";
 import { loggedMessagesStream } from "@/lib/ai/logged-anthropic";
-import { RESPONSE_DEFAULT_PROMPT } from "@/lib/ai/prompts";
+import { CITATION_INSTRUCTION, RESPONSE_DEFAULT_PROMPT } from "@/lib/ai/prompts";
 import type { Source } from "@/types/agents";
 
 const MAX_TOKENS = 4096;
@@ -43,7 +43,7 @@ export async function* runResponseAgent(ctx: ResponseAgentContext): AsyncIterabl
     : RESPONSE_DEFAULT_PROMPT;
 
   const system = ctx.groundingContext
-    ? `${promptDef.text}\n\nRetrieved context:\n${ctx.groundingContext}`
+    ? `${promptDef.text}\n\nRetrieved context:\n${ctx.groundingContext}\n\n${CITATION_INSTRUCTION}`
     : promptDef.text;
 
   const messages = [...ctx.history, { role: "user" as const, content: ctx.userMessage }];
