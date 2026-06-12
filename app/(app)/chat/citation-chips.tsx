@@ -1,5 +1,9 @@
 import type { Source } from "@/types/agents";
 
+// Shared base style for citation chips (inline markers + bottom list).
+export const CITATION_CHIP_CLASS =
+  "border-border text-charcoal hover:bg-white/40 inline-flex items-center rounded-full border bg-white/20 px-2 py-0.5 text-xs leading-tight transition-colors";
+
 type Props = {
   sources: Source[] | null | undefined;
 };
@@ -26,7 +30,7 @@ export function CitationChips({ sources }: Props) {
               target="_blank"
               rel="noopener noreferrer"
               title={s.title}
-              className="border-border text-charcoal hover:bg-white/40 inline-flex items-center rounded-full border bg-white/20 px-2 py-0.5 text-xs leading-tight transition-colors"
+              className={CITATION_CHIP_CLASS}
             >
               {label}
             </a>
@@ -36,7 +40,7 @@ export function CitationChips({ sources }: Props) {
           <span
             key={s.id}
             title={s.title}
-            className="border-border text-muted-gray inline-flex cursor-default items-center rounded-full border bg-white/10 px-2 py-0.5 text-xs leading-tight"
+            className={`${CITATION_CHIP_CLASS} text-muted-gray cursor-default`}
           >
             {label}
           </span>
