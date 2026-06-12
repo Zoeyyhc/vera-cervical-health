@@ -1,3 +1,4 @@
+import type { Source } from "@/types/agents";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { MarkdownMessage } from "./markdown-message";
@@ -96,5 +97,34 @@ describe("MarkdownMessage", () => {
   it("tolerates partial/streaming markdown (unclosed bold)", () => {
     // Should not throw while a token is mid-stream
     expect(() => render(<MarkdownMessage content="hello **wor" />)).not.toThrow();
+  });
+});
+
+describe("MarkdownMessage inline citations", () => {
+  const sources: Source[] = [
+    { id: "1", title: "Cancer Council", url: "https://example.com/a", chunkId: "c1" },
+  ];
+
+  it("renders a [1] marker as a clickable chip linking to the source", () => {
+    render(
+      <MarkdownMessage content="Screening every 5 years [1]." sources={sources} messageId="m1" />
+    );
+    const link = screen.getByRole("link", { name: "[1]" });
+    expect(link).toHaveAttribute("href", "https://example.com/a");
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("renders an unmatched [2] as plain text", () => {
+    render(<MarkdownMessage content="A claim [2]." sources={sources} messageId="m1" />);
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByText(/\[2\]/)).toBeInTheDocument();
+  });
+
+  it("still renders normal markdown links untouched", () => {
+    render(
+      <MarkdownMessage content="see [docs](https://example.com)" sources={sources} messageId="m1" />
+    );
+    const link = screen.getByRole("link", { name: "docs" });
+    expect(link).toHaveAttribute("href", "https://example.com");
   });
 });
