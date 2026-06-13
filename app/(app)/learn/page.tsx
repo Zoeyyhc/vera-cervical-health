@@ -7,11 +7,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Learn - Cervix",
+  title: "Learn - Vera",
   description:
     "Plain-language explainers about HPV, cervical screening, the vaccine, and what your results mean. Cited sources, never a diagnosis.",
   openGraph: {
-    title: "Learn - Cervix",
+    title: "Learn - Vera",
     description: "Plain-language cervical health education. Browse topics by what you need.",
   },
 };

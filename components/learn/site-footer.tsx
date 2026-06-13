@@ -8,7 +8,7 @@ export function SiteFooter() {
         <div className="md:col-span-2">
           <div className="flex items-center gap-2">
             <Eucalyptus className="w-5 h-5" />
-            <span className="text-[18px] font-semibold">Cervix</span>
+            <span className="text-[18px] font-semibold">Vera</span>
           </div>
           <p className="caption mt-4 max-w-sm">
             Plain-language cervical health education. Cited sources, never a diagnosis.
@@ -31,7 +31,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-border">
         <div className="mx-auto max-w-[1200px] px-6 py-6 caption flex flex-wrap justify-between gap-4">
-          <span>© 2026 Cervix. General education, not medical advice.</span>
+          <span>© 2026 Vera. General education, not medical advice.</span>
           <span>Made with care.</span>
         </div>
       </div>

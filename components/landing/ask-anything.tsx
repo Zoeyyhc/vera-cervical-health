@@ -17,7 +17,7 @@ export function AskAnything() {
             Ask anything you'd ask a doctor — without booking the appointment.
           </h2>
           <p className="body-large mt-6 text-muted-gray">
-            The Cervix assistant answers in plain language, cites its sources, and never replaces a
+            The Vera assistant answers in plain language, cites its sources, and never replaces a
             clinician. Your conversations stay private.
           </p>
           <ul className="mt-8 space-y-3">
@@ -33,7 +33,7 @@ export function AskAnything() {
           <p className="caption text-muted-gray">You</p>
           <p className="body-base mt-1">What does a HPV-positive result actually mean?</p>
           <div className="mt-6 border-t border-border pt-6">
-            <p className="caption text-muted-gray">Cervix</p>
+            <p className="caption text-muted-gray">Vera</p>
             <p className="body-base mt-1">
               A positive HPV result means the virus was detected — it does not mean you have cancer.
               Most HPV infections clear on their own within one to two years. Your doctor will

@@ -10,7 +10,7 @@ export function AskAIBand() {
         <div>
           <h2 className="h-article-2">Have a question we haven't answered?</h2>
           <p className="body-md text-muted-foreground mt-3 max-w-md">
-            Ask the Cervix assistant. Every answer cites its sources, and it will always recommend a
+            Ask the Vera assistant. Every answer cites its sources, and it will always recommend a
             clinician when the question needs one.
           </p>
           <a href="/chat" className="btn-primary mt-6">

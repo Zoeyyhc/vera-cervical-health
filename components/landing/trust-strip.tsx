@@ -13,8 +13,8 @@ export function TrustStrip() {
           ))}
         </div>
         <p className="body-base mx-auto mt-6 max-w-[640px] text-muted-gray">
-          Every answer the assistant gives is traceable to a cited source. Cervix is not a
-          diagnostic tool — always consult a healthcare professional.
+          Every answer the assistant gives is traceable to a cited source. Vera is not a diagnostic
+          tool — always consult a healthcare professional.
         </p>
       </div>
     </section>

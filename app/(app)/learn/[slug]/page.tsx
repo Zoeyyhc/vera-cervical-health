@@ -12,12 +12,12 @@ export function generateStaticParams() {
 
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
   const a = getArticle(params.slug);
-  if (!a) return { title: "Article not found - Cervix" };
+  if (!a) return { title: "Article not found - Vera" };
   return {
-    title: `${a.title} - Cervix`,
+    title: `${a.title} - Vera`,
     description: a.excerpt,
     openGraph: {
-      title: `${a.title} - Cervix`,
+      title: `${a.title} - Vera`,
       description: a.excerpt,
     },
   };

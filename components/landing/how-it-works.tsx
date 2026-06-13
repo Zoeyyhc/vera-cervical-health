@@ -63,7 +63,7 @@ export function HowItWorks() {
       <div className="container-cervix">
         <div className="flex items-center gap-3">
           <Sprig className="text-foreground" />
-          <h2 className="heading-sub">How Cervix works.</h2>
+          <h2 className="heading-sub">How Vera works.</h2>
         </div>
         <div className="mt-12 grid gap-12 md:grid-cols-3">
           {steps.map((s, i) => (
