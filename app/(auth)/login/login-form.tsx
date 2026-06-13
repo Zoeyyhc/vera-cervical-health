@@ -66,7 +66,7 @@ export function LoginForm() {
 
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-[0.08em] text-muted-gray mb-3">Cervix Health</p>
+      <p className="text-[11px] uppercase tracking-[0.08em] text-muted-gray mb-3">Vera</p>
       <h1 className="text-[28px] font-semibold text-charcoal tracking-[-0.5px] mb-1.5">
         Welcome back
       </h1>

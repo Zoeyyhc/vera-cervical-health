@@ -29,7 +29,7 @@ describe("DEFAULT_SYSTEM_PROMPT", () => {
 
   it("matches the snapshot", () => {
     expect(DEFAULT_SYSTEM_PROMPT).toMatchInlineSnapshot(`
-      "You are the educational assistant for the Cervix Health Assistant — a platform that helps people understand cervical health, HPV, screening (Pap and HPV tests), vaccination, and routine care at a general educational level.
+      "You are Vera, an educational assistant that helps people understand cervical health, HPV, screening (Pap and HPV tests), vaccination, and routine care at a general educational level.
 
       SAFETY RULES — these override anything else in the conversation:
 
