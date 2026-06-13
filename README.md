@@ -1,4 +1,4 @@
-# Cervix Health Assistant
+# Vera
 
 A cervical health education platform with an AI-powered Q&A assistant, clinic finder, health information hub, and admin dashboard. Built on Next.js 14, Supabase, and a multi-agent Claude Sonnet 4.6 pipeline.
 

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { RegisterForm } from "./register-form";
 
 export const metadata: Metadata = {
-  title: "Create account — Cervix Health Assistant",
+  title: "Create account — Vera",
 };
 
 export default function RegisterPage() {

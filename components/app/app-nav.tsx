@@ -30,7 +30,7 @@ export function AppNav() {
     >
       <nav className="container-cervix flex h-16 items-center justify-between">
         <Link href="/chat" className="text-[18px] font-semibold tracking-tight">
-          Cervix
+          Vera
         </Link>
         <ul className="hidden items-center gap-8 md:flex">
           {links.map((l) => {

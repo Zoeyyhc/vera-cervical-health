@@ -33,7 +33,7 @@ export function Footer() {
       <div className="rounded-container border-t border-border pt-12">
         <div className="grid gap-10 md:grid-cols-4">
           <div>
-            <p className="text-[18px] font-semibold">Cervix</p>
+            <p className="text-[18px] font-semibold">Vera</p>
             <p className="caption mt-3 text-muted-gray">
               Cervical health education, grounded in trusted sources.
             </p>
@@ -54,7 +54,7 @@ export function Footer() {
           ))}
         </div>
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 md:flex-row">
-          <p className="caption text-muted-gray">© 2026 Cervix</p>
+          <p className="caption text-muted-gray">© 2026 Vera</p>
           <p className="caption text-muted-gray">
             <span className="underline underline-offset-4">EN</span>
             {" | "}
@@ -64,7 +64,7 @@ export function Footer() {
           </p>
         </div>
         <p className="caption mt-6 text-center text-muted-gray">
-          Cervix is an educational tool. It is not a substitute for medical advice, diagnosis, or
+          Vera is an educational tool. It is not a substitute for medical advice, diagnosis, or
           treatment.
         </p>
       </div>

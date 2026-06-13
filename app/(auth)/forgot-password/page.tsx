@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { ForgotPasswordForm } from "./forgot-password-form";
 
 export const metadata: Metadata = {
-  title: "Reset password — Cervix Health Assistant",
+  title: "Reset password — Vera",
 };
 
 export default function ForgotPasswordPage() {

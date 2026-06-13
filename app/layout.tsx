@@ -7,7 +7,7 @@ import "./globals.css";
 // To restore: add the licensed CameraPlainVariable.otf to app/fonts/ and re-enable localFont.
 
 export const metadata: Metadata = {
-  title: "Cervix Health Assistant",
+  title: "Vera — Cervical Health",
   description: "Cervical health education and AI-powered Q&A assistant.",
 };
 

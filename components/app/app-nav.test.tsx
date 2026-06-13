@@ -18,7 +18,7 @@ describe("AppNav", () => {
   it("renders the logo, all three nav links, and the sign out button", () => {
     mockPathname.mockReturnValue("/chat");
     render(<AppNav />);
-    expect(screen.getByRole("link", { name: /^cervix$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^vera$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^chat$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^clinics$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^learn$/i })).toBeInTheDocument();
