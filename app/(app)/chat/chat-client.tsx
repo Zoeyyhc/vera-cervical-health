@@ -204,7 +204,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     if (isUser) {
       return message.content;
     }
-    return <MarkdownMessage content={message.content} />;
+    return (
+      <MarkdownMessage content={message.content} sources={message.sources} messageId={message.id} />
+    );
   };
 
   return (
@@ -215,7 +217,13 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         >
           {renderBody()}
         </div>
-        {message.role === "assistant" && <CitationChips sources={message.sources} />}
+        {message.role === "assistant" && (
+          <CitationChips
+            sources={message.sources}
+            messageId={message.id}
+            content={message.content}
+          />
+        )}
       </div>
     </div>
   );

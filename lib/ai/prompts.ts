@@ -28,6 +28,13 @@ If unsure, choose general_chat.`
 
 export const RESPONSE_DEFAULT_PROMPT = defPrompt("response.default", "v1", DEFAULT_SYSTEM_PROMPT);
 
+/**
+ * Appended to the response system prompt ONLY when grounding context is
+ * present (RAG / news / events). Tells the model to cite the numbered chunks
+ * inline. Never added to ungrounded (general_chat) turns.
+ */
+export const CITATION_INSTRUCTION = `CITATIONS: The retrieved context above is numbered [1], [2], and so on. After any sentence or claim you draw from that context, append the corresponding marker inline, e.g. "screening is recommended every 5 years [1]." Use consecutive markers like [1][2] when a claim draws on more than one source. Only cite numbers that actually appear in the retrieved context. Do not add a separate "Sources" list at the end — inline markers only.`;
+
 export function promptHash(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }

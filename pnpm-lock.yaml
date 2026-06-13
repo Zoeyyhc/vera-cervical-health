@@ -129,6 +129,9 @@ importers:
       postcss:
         specifier: ^8.5.3
         version: 8.5.9
+      remark-parse:
+        specifier: ^11.0.0
+        version: 11.0.0
       tailwindcss:
         specifier: ^3.4.17
         version: 3.4.19(tsx@4.21.0)
@@ -138,6 +141,9 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+      unified:
+        specifier: ^11.0.5
+        version: 11.0.5
       vitest:
         specifier: ^4.1.4
         version: 4.1.4(@types/node@20.19.39)(jsdom@29.0.2(@noble/hashes@1.8.0))(msw@2.13.2(@types/node@20.19.39)(typescript@5.9.3))(vite@8.0.8(@types/node@20.19.39)(esbuild@0.27.7)(jiti@1.21.7)(tsx@4.21.0))
