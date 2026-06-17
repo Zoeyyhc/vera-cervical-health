@@ -9,10 +9,11 @@ A cervical health education platform with an AI-powered Q&A assistant, clinic fi
 ## Features
 
 - **AI assistant** — multi-agent chat backed by a RAG pipeline over a curated knowledge base of public health sources (CDC, NHS, healthdirect AU).
+- **Self-improving knowledge base** — a scheduled discovery pipeline detects questions the knowledge base answers poorly, finds authoritative sources to fill the gap, and stages them for one-click admin review. Runs every 3 days via Vercel Cron.
 - **Clinic finder** — proxied Google Places search; no clinic data stored locally.
 - **Learn hub** — curated health articles plus live news and events feeds.
 - **Auth & roles** — Supabase Auth (email/password + Google OAuth) with `guest`, `user`, `admin` roles enforced via RLS.
-- **Admin dashboard** — knowledge ingestion, content management, role-gated server-side.
+- **Admin dashboard** — knowledge ingestion, discovery review queue, content management, role-gated server-side.
 
 ---
 
@@ -59,6 +60,31 @@ Each agent is a pure function in `lib/agents/`. Tools (`retrieveHealthContext`, 
 3. Each chunk embedded via OpenAI `text-embedding-3-small`
 4. Stored in `knowledge_chunks` (pgvector, 1536 dimensions)
 5. Query time: embed → cosine similarity (threshold 0.75) → top-k chunks injected as Response Agent context
+
+### Knowledge discovery pipeline
+
+The knowledge base improves itself in response to real demand — it is **gap-driven, not keyword-driven**:
+
+```
+User asks a health question
+      │
+      ▼
+RAG retrieval scores below the coverage threshold (0.52)
+      │   orchestrator logs a `rag_gap` analytics event
+      ▼
+Cron (every 3 days) or admin "Run discovery now"
+      │
+      ├── mine gaps        cluster recent rag_gap events → top themes
+      ├── synthesize        LLM generates search queries per theme
+      ├── search + score    SerpAPI → authority allowlist/denylist + LLM judge
+      ├── fetch + dedup      extract main text, skip near-duplicates of the KB
+      └── stage candidate   summarize + tag → knowledge_candidates (pending)
+      │
+      ▼
+Admin reviews at /admin/knowledge → Approve (ingest) or Reject
+```
+
+If there are no fresh gaps, a run stages nothing — the pipeline is reactive and never invents work. Authority gates (WHO, CDC, NHS, ACOG, healthdirect AU, …), per-run bounds, and a mandatory human-review step keep low-quality or off-domain content out of `knowledge_chunks`. Triggered by `GET /api/embeddings/discover`, authenticated by either a Vercel Cron bearer token (`CRON_SECRET`) or an admin session. See [`docs/discovery-pipeline.md`](docs/discovery-pipeline.md) for thresholds, bounds, and tuning.
 
 ### External API proxy pattern
 
@@ -171,6 +197,7 @@ cervix-assistant/
 | Doc | Contents |
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | Agent pipeline, RAG flow, tool call chain |
+| [`docs/discovery-pipeline.md`](docs/discovery-pipeline.md) | Gap-driven knowledge discovery: rag_gap capture, stages, thresholds, triggers |
 | [`docs/database.md`](docs/database.md) | Full schema, RLS roles, pgvector setup |
 | [`docs/api-routes.md`](docs/api-routes.md) | Every API route with auth requirements |
 | [`docs/env-vars.md`](docs/env-vars.md) | All env vars with provider links |
@@ -211,7 +238,7 @@ See [`CLAUDE.md`](CLAUDE.md) for the full set of conventions and constraints.
 
 ## Status
 
-Solo-built, in active development. See [`docs/sprints.md`](docs/sprints.md) for current priorities.
+Solo-built and actively developed. The core product is in place — multi-agent chat, RAG knowledge base, self-improving discovery pipeline, clinic finder, learn hub, auth/roles, and an admin dashboard. See [`docs/sprints.md`](docs/sprints.md) for current priorities and [`docs/discovery-pipeline.md`](docs/discovery-pipeline.md) for planned enhancements (topic-driven discovery, background-job UX, run history).
 
 ---
 
