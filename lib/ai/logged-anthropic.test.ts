@@ -63,7 +63,7 @@ describe("loggedMessagesCreate", () => {
       session_id: "s-1",
       agent: "classifier",
       prompt_id: "classifier",
-      prompt_version: "v1",
+      prompt_version: CLASSIFIER_PROMPT.version,
       prompt_hash: promptHash(CLASSIFIER_PROMPT.text),
       model: "claude-sonnet-4-6",
       temperature: 0,
