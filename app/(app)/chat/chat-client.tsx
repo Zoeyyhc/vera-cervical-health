@@ -7,9 +7,9 @@ import type { Source } from "@/types/agents";
 import { Loader2Icon, SendIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { CitationChips } from "./citation-chips";
+import { CitationChips, remapCitations } from "./citation-chips";
 import { EmptyState } from "./empty-state";
 
 // react-markdown + remark-gfm + rehype-sanitize is sizeable and isn't needed
@@ -197,6 +197,14 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       ? "text-muted-gray border-border border bg-white/20"
       : "text-charcoal border-border border bg-white/60";
 
+  // Renumber the model's retrieval-rank markers ([1][2][5]) to a contiguous
+  // 1..N once, then feed the same remapped content/sources to both the inline
+  // renderer and the footer chips so their numbering stays aligned.
+  const { content, sources } = useMemo(
+    () => remapCitations(message.content, message.sources),
+    [message.content, message.sources]
+  );
+
   const renderBody = () => {
     if (!message.content) {
       return isStreaming ? <TypingDots /> : null;
@@ -204,9 +212,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     if (isUser) {
       return message.content;
     }
-    return (
-      <MarkdownMessage content={message.content} sources={message.sources} messageId={message.id} />
-    );
+    return <MarkdownMessage content={content} sources={sources} messageId={message.id} />;
   };
 
   return (
@@ -218,11 +224,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           {renderBody()}
         </div>
         {message.role === "assistant" && (
-          <CitationChips
-            sources={message.sources}
-            messageId={message.id}
-            content={message.content}
-          />
+          <CitationChips sources={sources} messageId={message.id} content={content} />
         )}
       </div>
     </div>
