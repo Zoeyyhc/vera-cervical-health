@@ -50,7 +50,7 @@ export async function listRecentGaps(supabase: SupabaseClient<Database>): Promis
         question,
         topScore: typeof p.top_score === "number" ? p.top_score : null,
         source: p.source === "manual" ? ("manual" as const) : ("user" as const),
-        createdAt: r.created_at,
+        createdAt: r.created_at ?? "",
         addressed: addressed.has(r.id),
       };
     })

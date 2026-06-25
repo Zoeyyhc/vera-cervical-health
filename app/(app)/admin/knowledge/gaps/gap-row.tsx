@@ -2,7 +2,7 @@ import type { KnowledgeGap } from "@/lib/discovery/gaps";
 
 /** One row in the admin gaps list. Presentational; no data fetching. */
 export function GapRow({ gap }: { gap: KnowledgeGap }) {
-  const date = new Date(gap.createdAt).toLocaleDateString();
+  const date = gap.createdAt ? new Date(gap.createdAt).toLocaleDateString() : "";
   const badge = "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium";
 
   return (
