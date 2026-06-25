@@ -1,3 +1,4 @@
+import type { Source } from "@/types/agents";
 import type { Database } from "@/types/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -69,4 +70,52 @@ export async function loadSessionsForUser(
   const recent = items.filter((s) => s.starredAt === null);
 
   return { starred, recent };
+}
+
+export type LoadedMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  status: "complete";
+  sources?: Source[];
+};
+
+/**
+ * Loads a single session's messages for the chat page. The session-existence
+ * check and the message fetch have no data dependency, so they run in parallel
+ * (one network latency instead of two serial round-trips — matters most when
+ * the app server and Supabase are a real network apart).
+ *
+ * Returns `null` when the session is missing, soft-deleted, or not owned by the
+ * caller (RLS scopes the lookup) — the caller turns that into `notFound()`.
+ * Throws only when the message query itself errors for a valid session.
+ */
+export async function loadSessionWithMessages(
+  supabase: SupabaseClient<Database>,
+  sessionId: string
+): Promise<LoadedMessage[] | null> {
+  const [sessionRes, messagesRes] = await Promise.all([
+    supabase
+      .from("chat_sessions")
+      .select("id")
+      .eq("id", sessionId)
+      .is("deleted_at", null)
+      .maybeSingle(),
+    supabase
+      .from("chat_messages")
+      .select("id, role, content, sources")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  if (sessionRes.error || !sessionRes.data) return null;
+  if (messagesRes.error) throw new Error(messagesRes.error.message);
+
+  return (messagesRes.data ?? []).map((m) => ({
+    id: m.id,
+    role: m.role as "user" | "assistant",
+    content: m.content,
+    status: "complete" as const,
+    sources: (m.sources as Source[] | null) ?? undefined,
+  }));
 }

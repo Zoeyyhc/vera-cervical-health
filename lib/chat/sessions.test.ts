@@ -50,7 +50,7 @@ describe("deriveSessionTitle", () => {
 });
 
 import { vi } from "vitest";
-import { type SessionListItem, loadSessionsForUser } from "./sessions";
+import { type SessionListItem, loadSessionWithMessages, loadSessionsForUser } from "./sessions";
 
 /**
  * Mocks the chained query builder used by loadSessionsForUser. The chain is
@@ -181,5 +181,108 @@ describe("loadSessionsForUser", () => {
   it("throws if the underlying query errors", async () => {
     const { supabase } = mockSupabaseSessionsQuery(null, new Error("db down"));
     await expect(loadSessionsForUser(supabase)).rejects.toThrow("db down");
+  });
+});
+
+/**
+ * Mocks the two independent queries loadSessionWithMessages fires in parallel:
+ *   chat_sessions: from → select → eq → is → maybeSingle  (terminal: maybeSingle)
+ *   chat_messages: from → select → eq → order             (terminal: order, awaited)
+ * `from` dispatches per table so each query resolves to its own result.
+ */
+function mockSupabaseSessionWithMessages(
+  sessionResult: { data: { id: string } | null; error: Error | null },
+  messagesResult: { data: Array<Record<string, unknown>> | null; error: Error | null }
+) {
+  const maybeSingle = vi.fn().mockResolvedValue(sessionResult);
+  const sessionChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
+    maybeSingle,
+  } as Record<string, ReturnType<typeof vi.fn>>;
+  sessionChain.select.mockReturnValue(sessionChain);
+  sessionChain.eq.mockReturnValue(sessionChain);
+  sessionChain.is.mockReturnValue(sessionChain);
+
+  const order = vi.fn().mockResolvedValue(messagesResult);
+  const messagesChain = {
+    select: vi.fn(),
+    eq: vi.fn(),
+    order,
+  } as Record<string, ReturnType<typeof vi.fn>>;
+  messagesChain.select.mockReturnValue(messagesChain);
+  messagesChain.eq.mockReturnValue(messagesChain);
+
+  const from = vi.fn((table: string) => (table === "chat_sessions" ? sessionChain : messagesChain));
+  const supabase = { from } as unknown as Parameters<typeof loadSessionWithMessages>[0];
+  return { supabase, from };
+}
+
+describe("loadSessionWithMessages", () => {
+  it("returns mapped messages when the session exists", async () => {
+    const { supabase, from } = mockSupabaseSessionWithMessages(
+      { data: { id: "sess-1" }, error: null },
+      {
+        data: [
+          { id: "m1", role: "user", content: "Hi", sources: null },
+          {
+            id: "m2",
+            role: "assistant",
+            content: "Hello",
+            sources: [{ title: "Ref", url: "https://x" }],
+          },
+        ],
+        error: null,
+      }
+    );
+
+    const result = await loadSessionWithMessages(supabase, "sess-1");
+
+    // both tables queried (parallel fan-out, not a serial dependency)
+    expect(from).toHaveBeenCalledWith("chat_sessions");
+    expect(from).toHaveBeenCalledWith("chat_messages");
+    expect(result).toEqual([
+      { id: "m1", role: "user", content: "Hi", status: "complete", sources: undefined },
+      {
+        id: "m2",
+        role: "assistant",
+        content: "Hello",
+        status: "complete",
+        sources: [{ title: "Ref", url: "https://x" }],
+      },
+    ]);
+  });
+
+  it("returns null when the session does not exist (caller 404s)", async () => {
+    const { supabase } = mockSupabaseSessionWithMessages(
+      { data: null, error: null },
+      { data: [], error: null }
+    );
+    expect(await loadSessionWithMessages(supabase, "missing")).toBeNull();
+  });
+
+  it("returns null when the session lookup errors", async () => {
+    const { supabase } = mockSupabaseSessionWithMessages(
+      { data: null, error: new Error("rls") },
+      { data: [], error: null }
+    );
+    expect(await loadSessionWithMessages(supabase, "x")).toBeNull();
+  });
+
+  it("throws when the message query errors for a valid session", async () => {
+    const { supabase } = mockSupabaseSessionWithMessages(
+      { data: { id: "sess-1" }, error: null },
+      { data: null, error: new Error("messages down") }
+    );
+    await expect(loadSessionWithMessages(supabase, "sess-1")).rejects.toThrow("messages down");
+  });
+
+  it("returns an empty array for a valid session with no messages", async () => {
+    const { supabase } = mockSupabaseSessionWithMessages(
+      { data: { id: "sess-1" }, error: null },
+      { data: [], error: null }
+    );
+    expect(await loadSessionWithMessages(supabase, "sess-1")).toEqual([]);
   });
 });
