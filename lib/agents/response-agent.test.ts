@@ -129,11 +129,32 @@ describe("runResponseAgent", () => {
     const args = anthropic.messages.stream.mock.calls[0] as unknown as [
       { model: string; system: string; messages: unknown[]; max_tokens: number },
     ];
+    // The last prior turn carries the cache_control breakpoint; the current
+    // user turn is appended plain (no grounding here).
     expect(args[0].messages).toEqual([
       { role: "user", content: "What is HPV?" },
-      { role: "assistant", content: "HPV stands for human papillomavirus..." },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "HPV stands for human papillomavirus...",
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+      },
       { role: "user", content: "How is it transmitted?" },
     ]);
+  });
+
+  test("marks no cache breakpoint when there is no prior history", async () => {
+    const anthropic = mockAnthropic({ events: [] });
+    vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
+
+    await collect(runResponseAgent({ userMessage: "Hi", history: [] }));
+
+    const args = anthropic.messages.stream.mock.calls[0] as unknown as [{ messages: unknown[] }];
+    expect(args[0].messages).toEqual([{ role: "user", content: "Hi" }]);
   });
 
   test("uses the explicit systemPrompt when provided", async () => {
@@ -154,7 +175,7 @@ describe("runResponseAgent", () => {
     expect(args[0].system).toBe("You are a custom assistant.");
   });
 
-  test("appends groundingContext to the system prompt when provided", async () => {
+  test("carries groundingContext on the current user turn, keeping system stable", async () => {
     const anthropic = mockAnthropic({ events: [] });
     vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
 
@@ -167,14 +188,18 @@ describe("runResponseAgent", () => {
     );
 
     const args = anthropic.messages.stream.mock.calls[0] as unknown as [
-      { model: string; system: string; messages: unknown[]; max_tokens: number },
+      { system: string; messages: { content: string }[] },
     ];
-    expect(args[0].system).toContain(DEFAULT_SYSTEM_PROMPT);
-    expect(args[0].system).toContain("Retrieved context:");
-    expect(args[0].system).toContain("Source 1: HPV is...");
+    // System stays byte-identical to the default so the cached prefix holds.
+    expect(args[0].system).toBe(DEFAULT_SYSTEM_PROMPT);
+    // Grounding rides on the (last) user turn, not the system prompt.
+    const userTurn = args[0].messages[args[0].messages.length - 1].content;
+    expect(userTurn).toContain("Retrieved context:");
+    expect(userTurn).toContain("Source 1: HPV is...");
+    expect(userTurn).toContain("Hi");
   });
 
-  test("treats empty-string groundingContext the same as absent (no 'Retrieved context:' header)", async () => {
+  test("treats empty-string groundingContext the same as absent (plain user turn)", async () => {
     const anthropic = mockAnthropic({ events: [] });
     vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
 
@@ -187,13 +212,13 @@ describe("runResponseAgent", () => {
     );
 
     const args = anthropic.messages.stream.mock.calls[0] as unknown as [
-      { model: string; system: string; messages: unknown[]; max_tokens: number },
+      { system: string; messages: { content: string }[] },
     ];
     expect(args[0].system).toBe(DEFAULT_SYSTEM_PROMPT);
-    expect(args[0].system).not.toContain("Retrieved context:");
+    expect(args[0].messages[args[0].messages.length - 1].content).toBe("Hi");
   });
 
-  test("appends the citation instruction when groundingContext is present", async () => {
+  test("appends the citation instruction on the user turn when groundingContext is present", async () => {
     const anthropic = mockAnthropic({
       events: [{ type: "content_block_delta", delta: { type: "text_delta", text: "ok" } }],
     });
@@ -206,8 +231,13 @@ describe("runResponseAgent", () => {
         groundingContext: "[1] HPV is a virus.",
       })
     );
-    const args = anthropic.messages.stream.mock.calls[0] as unknown as [{ system: string }];
-    expect(args[0].system).toContain("append the corresponding marker");
+    const args = anthropic.messages.stream.mock.calls[0] as unknown as [
+      { system: string; messages: { content: string }[] },
+    ];
+    expect(args[0].messages[args[0].messages.length - 1].content).toContain(
+      "append the corresponding marker"
+    );
+    expect(args[0].system).not.toContain("append the corresponding marker");
   });
 
   test("does NOT append the citation instruction for ungrounded turns", async () => {
@@ -217,9 +247,13 @@ describe("runResponseAgent", () => {
     vi.mocked(getAnthropicClient).mockReturnValue(anthropic as never);
 
     await collect(runResponseAgent({ userMessage: "Hi", history: [] }));
-    const args = anthropic.messages.stream.mock.calls[0] as unknown as [{ system: string }];
+    const args = anthropic.messages.stream.mock.calls[0] as unknown as [
+      { system: string; messages: { content: string }[] },
+    ];
     expect(args[0].system).toBe(DEFAULT_SYSTEM_PROMPT);
-    expect(args[0].system).not.toContain("append the corresponding marker");
+    expect(args[0].messages[args[0].messages.length - 1].content).not.toContain(
+      "append the corresponding marker"
+    );
   });
 
   test("propagates errors thrown during streaming", async () => {

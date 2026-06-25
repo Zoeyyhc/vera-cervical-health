@@ -1,4 +1,4 @@
-import { CLAUDE_MODEL } from "@/lib/ai/anthropic";
+import { CLAUDE_FAST_MODEL } from "@/lib/ai/anthropic";
 import { loggedMessagesCreate } from "@/lib/ai/logged-anthropic";
 import type { PromptDef } from "@/lib/ai/prompts";
 
@@ -14,7 +14,7 @@ export async function runDiscoveryLlm(
 ): Promise<string> {
   const res = await loggedMessagesCreate(
     {
-      model: CLAUDE_MODEL,
+      model: CLAUDE_FAST_MODEL,
       max_tokens: 1024,
       temperature: 0,
       system: prompt.text,
