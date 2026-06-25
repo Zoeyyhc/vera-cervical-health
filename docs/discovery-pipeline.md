@@ -152,8 +152,11 @@ lib/discovery/
   run.ts                     runDiscovery coordinator (bounded batch)
 app/api/embeddings/discover/route.ts    cron + manual trigger
 app/(app)/admin/knowledge/              review queue UI
+app/(app)/admin/knowledge/gaps/         view gaps + manual-seed UI
 lib/discovery/review-actions.ts         approveCandidate / rejectCandidate
-lib/auth/require-admin.ts               server-side admin gate
+lib/discovery/gaps.ts                    listRecentGaps (gaps view query)
+lib/discovery/gap-actions.ts             addManualGap (manual gap seed)
+lib/auth/require-admin.ts               requireAdmin + isCurrentUserAdmin (nav gate)
 ```
 
 Tables: `knowledge_candidates` (staging), `discovery_runs` (run log), and
@@ -164,9 +167,13 @@ Tables: `knowledge_candidates` (staging), `discovery_runs` (run log), and
 
 ## Operating it
 
-- **Exercise it manually:** ask the prod chat a few health questions the KB can't
-  answer well (creates `rag_gap` events), then click **"Run discovery now"** on
-  `/admin/knowledge`. Without gaps, a run stages nothing — that's expected.
+- **Exercise it manually:** either ask the prod chat a few health questions the KB
+  can't answer well (creates `rag_gap` events), or add a gap by hand on
+  `/admin/knowledge/gaps` (the "Add a gap" form inserts a `source:'manual'`
+  `rag_gap` event), then click **"Run discovery now"**. Without gaps, a run stages
+  nothing — that's expected.
+- **View gaps:** `/admin/knowledge/gaps` lists `rag_gap` events from the last
+  `GAP_LOOKBACK_DAYS`, each marked addressed/unaddressed and tagged User/Manual.
 - **Seeding the initial KB** is separate from discovery: `pnpm seed:kb` (or the
   same script pointed at prod via an env file) re-ingests the curated source
   docs in `supabase/seeds/knowledge/` straight into `knowledge_chunks`.
@@ -181,7 +188,9 @@ Tables: `knowledge_candidates` (staging), `discovery_runs` (run log), and
 ## Not built (possible future work)
 
 - **Topic-driven mode:** proactively cover a curated topic list even with no user
-  gaps. Today the pipeline is purely reactive to `rag_gap` events.
+  gaps. The manual "Add a gap" form on `/admin/knowledge/gaps` is a minimal slice
+  of this (seed one question at a time); a full curated-topic-list mode is still
+  unbuilt.
 - **Background-job UX:** "Run discovery now" currently blocks until the run
   finishes (up to `RUN_BUDGET_MS`).
 - **`discovery_runs` history view** in the admin section.
