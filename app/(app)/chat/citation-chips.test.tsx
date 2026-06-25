@@ -1,7 +1,7 @@
 import type { Source } from "@/types/agents";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { CitationChips, parseCitedMarkers } from "./citation-chips";
+import { CitationChips, parseCitedMarkers, remapCitations } from "./citation-chips";
 
 const fiveSources: Source[] = [
   { id: "1", title: "Source A", url: "https://a.com", chunkId: "c1" },
@@ -102,6 +102,55 @@ describe("CitationChips", () => {
     it("shows all sources when content prop is absent (back-compat)", () => {
       render(<CitationChips sources={fiveSources} />);
       expect(screen.getAllByRole("link")).toHaveLength(5);
+    });
+  });
+
+  describe("remapCitations", () => {
+    it("renumbers a non-contiguous citation set to a contiguous one", () => {
+      const out = remapCitations("X [1] Y [2] Z [5].", fiveSources);
+      expect(out.content).toBe("X [1] Y [2] Z [3].");
+      expect(out.sources?.map((s) => s.id)).toEqual(["1", "2", "5"]);
+    });
+
+    it("numbers by first appearance, not by original value", () => {
+      const out = remapCitations("First [5] then [2] then [1].", fiveSources);
+      expect(out.content).toBe("First [1] then [2] then [3].");
+      expect(out.sources?.map((s) => s.id)).toEqual(["5", "2", "1"]);
+    });
+
+    it("keeps repeated markers pointing at the same renumbered source", () => {
+      const out = remapCitations("A [5][2]. More [5].", fiveSources);
+      expect(out.content).toBe("A [1][2]. More [1].");
+      expect(out.sources?.map((s) => s.id)).toEqual(["5", "2"]);
+    });
+
+    it("leaves out-of-range markers untouched and excludes them from sources", () => {
+      const out = remapCitations("Valid [2] and bogus [9].", fiveSources);
+      expect(out.content).toBe("Valid [1] and bogus [9].");
+      expect(out.sources?.map((s) => s.id)).toEqual(["2"]);
+    });
+
+    it("returns content and sources unchanged when nothing is cited", () => {
+      const out = remapCitations("No markers here.", fiveSources);
+      expect(out.content).toBe("No markers here.");
+      expect(out.sources).toBe(fiveSources);
+    });
+
+    it("passes through null/undefined sources untouched", () => {
+      expect(remapCitations("text [1]", null)).toEqual({ content: "text [1]", sources: null });
+      expect(remapCitations("text [1]", undefined)).toEqual({
+        content: "text [1]",
+        sources: undefined,
+      });
+    });
+
+    it("renumbers stably as content streams in (prefix is a stable prefix)", () => {
+      // First appearance order is fixed as tokens arrive, so an early marker
+      // keeps its number when later markers stream in — no flicker.
+      const partial = remapCitations("Heat [1]. Sweats [5].", fiveSources);
+      const full = remapCitations("Heat [1]. Sweats [5]. Dryness [2].", fiveSources);
+      expect(partial.content).toBe("Heat [1]. Sweats [2].");
+      expect(full.content).toBe("Heat [1]. Sweats [2]. Dryness [3].");
     });
   });
 

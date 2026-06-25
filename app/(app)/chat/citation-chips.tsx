@@ -32,6 +32,49 @@ export function parseCitedMarkers(content: string): Set<number> {
 }
 
 /**
+ * Renumber the inline `[n]` markers in `content` to a contiguous 1..N sequence
+ * by order of first appearance, and return the cited sources reordered to match
+ * the new numbering. The model cites markers by retrieval rank, so a reply can
+ * reference [1][2][5] (chunks 3–4 retrieved but unused), which reads as gappy.
+ *
+ * Markers are renumbered in first-appearance order, so the mapping is a stable
+ * prefix as content streams in — an early marker never changes number when a
+ * later one arrives. Out-of-range markers (> sources.length) are left untouched
+ * and excluded from the result. When there are no sources or no valid citations,
+ * the inputs are returned unchanged.
+ *
+ * Apply once upstream and pass the result to BOTH the inline renderer and the
+ * footer chips so their numbering stays aligned.
+ */
+export function remapCitations<T extends Source[] | null | undefined>(
+  content: string,
+  sources: T
+): { content: string; sources: T } {
+  if (!sources || sources.length === 0) return { content, sources };
+
+  const remap = new Map<number, number>();
+  const order: number[] = [];
+  MARKER_RE.lastIndex = 0;
+  let m: RegExpExecArray | null = MARKER_RE.exec(content);
+  while (m !== null) {
+    const orig = Number(m[1]);
+    if (orig >= 1 && orig <= sources.length && !remap.has(orig)) {
+      order.push(orig);
+      remap.set(orig, order.length);
+    }
+    m = MARKER_RE.exec(content);
+  }
+  if (order.length === 0) return { content, sources };
+
+  const newContent = content.replace(MARKER_RE, (full, d: string) => {
+    const mapped = remap.get(Number(d));
+    return mapped ? `[${mapped}]` : full;
+  });
+  const newSources = order.map((orig) => sources[orig - 1]) as unknown as T;
+  return { content: newContent, sources: newSources };
+}
+
+/**
  * Renders 1-indexed numbered chips for each source under an assistant
  * message bubble. Sources with a URL render as `<a>` opening in a new tab;
  * those without render as a non-clickable `<span>`. When `content` cites a
