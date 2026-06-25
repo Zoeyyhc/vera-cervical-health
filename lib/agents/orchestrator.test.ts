@@ -112,7 +112,8 @@ describe("classifyIntent", () => {
     ];
     expect(args[0].temperature).toBe(0);
     expect(args[0].max_tokens).toBeLessThan(64); // tight bound for a single label
-    expect(args[0].model).toBe("claude-sonnet-4-6");
+    expect(args[0].model).toBe("claude-haiku-4-5"); // cheap model for routing
+
     expect(typeof args[0].system).toBe("string");
     expect(args[0].system.length).toBeGreaterThan(0);
   });

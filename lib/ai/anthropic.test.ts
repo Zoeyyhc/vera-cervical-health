@@ -5,12 +5,20 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import { CLAUDE_MODEL, getAnthropicClient } from "./anthropic";
+import { CLAUDE_FAST_MODEL, CLAUDE_MODEL, getAnthropicClient } from "./anthropic";
 
 describe("CLAUDE_MODEL", () => {
   it("is hard-coded to claude-sonnet-4-6", () => {
-    // Per CLAUDE.md: model string is hard-coded, never from env.
+    // Per CLAUDE.md: model string is hard-coded, never from env. The
+    // user-facing response agent stays on Sonnet for answer quality.
     expect(CLAUDE_MODEL).toBe("claude-sonnet-4-6");
+  });
+});
+
+describe("CLAUDE_FAST_MODEL", () => {
+  it("is hard-coded to claude-haiku-4-5", () => {
+    // Cheap model for non-user-facing calls (classifier, discovery).
+    expect(CLAUDE_FAST_MODEL).toBe("claude-haiku-4-5");
   });
 });
 

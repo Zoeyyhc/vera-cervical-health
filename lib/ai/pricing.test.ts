@@ -22,6 +22,16 @@ describe("computeCostUsd", () => {
     expect(cost).toBeCloseTo(4.05, 6);
   });
 
+  it("computes cost for claude-haiku-4-5 (classifier / discovery model)", () => {
+    const cost = computeCostUsd("claude-haiku-4-5", {
+      input_tokens: 1_000_000,
+      output_tokens: 1_000_000,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+    });
+    expect(cost).toBeCloseTo(6.0, 6); // $1 in + $5 out
+  });
+
   it("returns null for unknown model", () => {
     const cost = computeCostUsd("not-a-real-model", {
       input_tokens: 100,

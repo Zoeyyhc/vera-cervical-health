@@ -172,7 +172,7 @@ This applies to: Google Maps, NewsAPI, SerpAPI.
 - Each agent is a pure function: takes context, returns a typed result
 - One file per agent in `lib/agents/`; one file per tool in `lib/tools/`
 - No agent calls another agent directly — the Orchestrator coordinates
-- All Claude API calls use model string `claude-sonnet-4-6` (hard-coded, not from env)
+- Claude model strings are hard-coded (not from env), one per use class in `lib/ai/anthropic.ts`: the user-facing response agent uses `CLAUDE_MODEL` (`claude-sonnet-4-6`); the intent classifier and discovery pipeline use the cheaper `CLAUDE_FAST_MODEL` (`claude-haiku-4-5`). Add a `pricing.ts` entry for any new model or its cost logging silently returns null.
 
 ### Database
 - All migrations in `supabase/migrations/` with sequential numbering

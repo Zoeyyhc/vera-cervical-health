@@ -1,4 +1,4 @@
-import { CLAUDE_MODEL } from "@/lib/ai/anthropic";
+import { CLAUDE_FAST_MODEL } from "@/lib/ai/anthropic";
 import { loggedMessagesCreate } from "@/lib/ai/logged-anthropic";
 import { CLASSIFIER_PROMPT } from "@/lib/ai/prompts";
 import type { Intent } from "@/types/agents";
@@ -33,7 +33,7 @@ export async function classifyIntent(userMessage: string): Promise<ClassifyResul
   try {
     const response = await loggedMessagesCreate(
       {
-        model: CLAUDE_MODEL,
+        model: CLAUDE_FAST_MODEL,
         max_tokens: 16,
         temperature: 0,
         system: CLASSIFIER_PROMPT.text,

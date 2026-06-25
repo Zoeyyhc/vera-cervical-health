@@ -14,6 +14,12 @@ const PRICES: Record<string, ModelPrices> = {
     cacheReadPerMillion: 0.3,
     cacheWritePerMillion: 3.75,
   },
+  "claude-haiku-4-5": {
+    inputPerMillion: 1.0,
+    outputPerMillion: 5.0,
+    cacheReadPerMillion: 0.1,
+    cacheWritePerMillion: 1.25,
+  },
 };
 
 type UsageLike = Pick<Anthropic.Usage, "input_tokens" | "output_tokens"> & {

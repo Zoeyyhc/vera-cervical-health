@@ -3,8 +3,12 @@ import type { ChatHistoryMessage } from "@/lib/ai/context-window";
 import { loggedMessagesStream } from "@/lib/ai/logged-anthropic";
 import { CITATION_INSTRUCTION, RESPONSE_DEFAULT_PROMPT } from "@/lib/ai/prompts";
 import type { Source } from "@/types/agents";
+import type Anthropic from "@anthropic-ai/sdk";
 
-const MAX_TOKENS = 4096;
+// Health-education answers rarely need the old 4096-token ceiling; 2048 keeps
+// the (5×-priced) output tail bounded without truncating typical responses.
+// Bump this if real answers start hitting the cap mid-sentence.
+const MAX_TOKENS = 2048;
 
 export type ResponseAgentContext = {
   /** The new user turn. The agent appends this to `history` before calling Claude. */
@@ -14,8 +18,9 @@ export type ResponseAgentContext = {
   /**
    * Optional grounding block — RAG chunks, news headlines, or upcoming
    * events. The orchestrator builds the body (including any sub-header
-   * like "Recent news (last 7 days):"). Appended to the system prompt
-   * under "Retrieved context:" when non-empty.
+   * like "Recent news (last 7 days):"). Carried on the current user turn
+   * under "Retrieved context:" when non-empty (kept off the `system` prompt
+   * so the cached conversation prefix stays stable — see runResponseAgent).
    */
   groundingContext?: string;
   /**
@@ -42,11 +47,19 @@ export async function* runResponseAgent(ctx: ResponseAgentContext): AsyncIterabl
     ? { id: "response.override", version: "v1", text: ctx.systemPrompt }
     : RESPONSE_DEFAULT_PROMPT;
 
-  const system = ctx.groundingContext
-    ? `${promptDef.text}\n\nRetrieved context:\n${ctx.groundingContext}\n\n${CITATION_INSTRUCTION}`
-    : promptDef.text;
+  // Keep `system` byte-stable across every turn so the cached conversation
+  // prefix below is never invalidated. Per-query grounding (RAG/news/events)
+  // and the citation instruction ride on the *current* user turn instead —
+  // they sit after the cache breakpoint, so they never pollute the cached
+  // prefix, and because history persists the raw user message (without
+  // grounding) the prefix stays consistent turn to turn.
+  const system = promptDef.text;
 
-  const messages = [...ctx.history, { role: "user" as const, content: ctx.userMessage }];
+  const userContent = ctx.groundingContext
+    ? `Retrieved context:\n${ctx.groundingContext}\n\n${CITATION_INSTRUCTION}\n\n${ctx.userMessage}`
+    : ctx.userMessage;
+
+  const messages = buildMessages(ctx.history, userContent);
 
   const stream = loggedMessagesStream(
     {
@@ -67,4 +80,35 @@ export async function* runResponseAgent(ctx: ResponseAgentContext): AsyncIterabl
   if (ctx.groundingSources && ctx.groundingSources.length > 0) {
     yield { type: "sources", sources: ctx.groundingSources };
   }
+}
+
+/**
+ * Build the Messages array, marking the last prior turn with a `cache_control`
+ * breakpoint so each new request can reuse the cached `system` + history prefix
+ * (the multi-turn prompt-caching pattern). The breakpoint sits on the last
+ * *history* message, never on the current user turn, so the per-query grounding
+ * carried on that turn stays outside the cached prefix.
+ *
+ * Sonnet's minimum cacheable prefix is ~2048 tokens — shorter prefixes simply
+ * don't get cached (no error), so early/short conversations are a harmless
+ * no-op and caching kicks in once the history is large enough.
+ */
+function buildMessages(
+  history: ChatHistoryMessage[],
+  userContent: string
+): Anthropic.MessageParam[] {
+  const messages: Anthropic.MessageParam[] = history.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+
+  const last = messages[messages.length - 1];
+  if (last) {
+    last.content = [
+      { type: "text", text: last.content as string, cache_control: { type: "ephemeral" } },
+    ];
+  }
+
+  messages.push({ role: "user", content: userContent });
+  return messages;
 }
