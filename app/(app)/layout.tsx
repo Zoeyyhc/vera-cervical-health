@@ -1,13 +1,16 @@
 import { AppNav } from "@/components/app/app-nav";
+import { isCurrentUserAdmin } from "@/lib/auth/require-admin";
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const isAdmin = await isCurrentUserAdmin();
+
   return (
     <div className="flex min-h-screen flex-col">
-      <AppNav />
+      <AppNav isAdmin={isAdmin} />
       {/* flex flex-col makes <main> a flex container so chat's nested flex-1 chain
           (sidebar/messages/input) gets a definite height to grow into. Routes that
           rely on natural sizing (clinics/profile use min-h-screen) still work as

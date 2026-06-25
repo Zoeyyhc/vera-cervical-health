@@ -50,6 +50,26 @@ describe("AppNav", () => {
     expect(screen.getByRole("link", { name: /^learn$/i })).not.toHaveAttribute("aria-current");
   });
 
+  it("does not render an Admin link by default", () => {
+    mockPathname.mockReturnValue("/chat");
+    render(<AppNav />);
+    expect(screen.queryByRole("link", { name: /^admin$/i })).not.toBeInTheDocument();
+  });
+
+  it("renders an Admin link to /admin/knowledge when isAdmin", () => {
+    mockPathname.mockReturnValue("/chat");
+    render(<AppNav isAdmin />);
+    const adminLink = screen.getByRole("link", { name: /^admin$/i });
+    expect(adminLink).toBeInTheDocument();
+    expect(adminLink).toHaveAttribute("href", "/admin/knowledge");
+  });
+
+  it("marks the Admin link active on /admin routes", () => {
+    mockPathname.mockReturnValue("/admin/knowledge/gaps");
+    render(<AppNav isAdmin />);
+    expect(screen.getByRole("link", { name: /^admin$/i })).toHaveAttribute("aria-current", "page");
+  });
+
   it("hides the link list and sign out button on mobile via Tailwind classes", () => {
     mockPathname.mockReturnValue("/chat");
     const { container } = render(<AppNav />);
