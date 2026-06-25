@@ -85,6 +85,11 @@ All route handlers are in `app/api/` using Next.js App Router conventions (`rout
 **Auth:** `admin` role (server-side gate via `requireAdmin`, enforced in `app/(app)/admin/layout.tsx`).
 **Purpose:** Manage the documents in `knowledge_chunks` directly. **Lists** every document (one row per `source`, via the `list_knowledge_documents()` RPC). **Add** — server action `addDocument` chunks + embeds pasted text via `ingestDocument` (`source` = the typed name, `metadata.origin = "manual"`). **Delete** — server action `deleteDocument` hard-deletes all chunks for a `source`. Covers seed, discovery-approved, and manually-added documents alike.
 
+### `/admin/knowledge/gaps` (page, not an API route)
+
+**Auth:** `admin` role (server-side gate via `requireAdmin`, enforced in `app/(app)/admin/layout.tsx`).
+**Purpose:** View recent RAG coverage gaps and seed one by hand. **Lists** `rag_gap` events from the last `GAP_LOOKBACK_DAYS` (via `listRecentGaps`), each flagged `addressed` when its id appears in a `knowledge_candidates.gap_refs` array (the same test `mineGaps` uses), with a User/Manual source badge. **Add a gap** — server action `addManualGap` inserts a `rag_gap` event (`payload={ question, top_score: 0, source: "manual" }`, attributed to the admin) via the RLS-bound client, so it flows through `mineGaps` unchanged; `source` is display-only. **Run discovery now** — reuses the same `RunDiscoveryButton` as the review queue.
+
 ### `POST /api/analytics/event`
 
 **Auth:** `user` role  
