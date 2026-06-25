@@ -11,7 +11,7 @@ const links = [
   { label: "Learn", href: "/learn" },
 ];
 
-export function AppNav() {
+export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
 
@@ -49,6 +49,19 @@ export function AppNav() {
               </li>
             );
           })}
+          {isAdmin ? (
+            <li>
+              <Link
+                href="/admin/knowledge"
+                className={`text-base underline-offset-4 hover:underline ${
+                  pathname.startsWith("/admin") ? "underline" : ""
+                }`}
+                aria-current={pathname.startsWith("/admin") ? "page" : undefined}
+              >
+                Admin
+              </Link>
+            </li>
+          ) : null}
         </ul>
         <div className="hidden md:inline-flex">
           <SignOutButton />

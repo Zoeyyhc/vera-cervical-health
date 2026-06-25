@@ -22,6 +22,9 @@ export default async function KnowledgeReviewPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Link href="/admin/knowledge/gaps" className="text-sm text-charcoal underline">
+              View gaps →
+            </Link>
             <Link href="/admin/knowledge/documents" className="text-sm text-charcoal underline">
               Manage documents →
             </Link>

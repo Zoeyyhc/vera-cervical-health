@@ -29,3 +29,23 @@ export async function requireAdmin(): Promise<AdminContext> {
 
   return { supabase, user };
 }
+
+/**
+ * Non-redirecting admin check for shared surfaces (e.g. the (app) layout/nav).
+ * Returns false for guests and non-admins instead of redirecting, so it is safe
+ * to call on routes that all authenticated users can see.
+ */
+export async function isCurrentUserAdmin(): Promise<boolean> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  return profile?.role === "admin";
+}
