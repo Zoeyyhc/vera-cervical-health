@@ -64,6 +64,22 @@ payload     jsonb
 created_at  timestamptz default now()
 ```
 
+### Victoria Trusted Health MCP tables
+
+Added by `20260803120000_create_trusted_health_mcp.sql`. All four are admin-only by RLS; the MCP
+server reads them through the service-role client. Full context in `docs/trusted-health-mcp.md`.
+
+| Table | Purpose | Notes |
+|---|---|---|
+| `trusted_sources` | The allowlist registry — nothing is returned by the MCP unless it traces back to an `approved` row here | `canonical_host` is unique; `permitted_content` is a `text[]` constrained to `{health_content, directory, events}` |
+| `directory_links` | Approved deep links into first-party Victorian service directories | Deliberately **not** a clinic table — no provider records are stored. `search_url_template` may contain a `{location}` token |
+| `verified_events` | Manually curated events, invisible until approved | `expires_at` is a **generated column**, `coalesce(ends_at, starts_at)`, so expiry can never drift from the entered dates |
+| `mcp_call_logs` | One row per MCP tool call, for audit | Bounded scalars only — no chat text, no raw location, no `user_id`, no `session_id` |
+
+`knowledge_candidates` also gains a nullable `trusted_source_id` FK: per spec §6, v0.1 adds
+source governance to the existing knowledge review workflow rather than standing up a second
+clinical-content pipeline.
+
 ## pgvector Index
 
 ```sql
@@ -105,6 +121,10 @@ Three roles, enforced at the database level via RLS policies in
 | `chat_messages` | ✗ | ALL (via owned session) | ✗ | SELECT all |
 | `knowledge_chunks` | ✗ | SELECT (all rows) | — | SELECT, INSERT, UPDATE, DELETE |
 | `analytics_events` | ✗ | INSERT (self-attributed) | ✗ | SELECT all |
+| `trusted_sources` | ✗ | ✗ | ✗ | ALL |
+| `directory_links` | ✗ | ✗ | ✗ | ALL |
+| `verified_events` | ✗ | ✗ | ✗ | ALL |
+| `mcp_call_logs` | ✗ | ✗ | ✗ | SELECT |
 
 `profiles` has no INSERT/DELETE policy — rows are created by the
 `handle_new_user` trigger on `auth.users` (SECURITY DEFINER, bypasses RLS)
