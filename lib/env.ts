@@ -41,6 +41,11 @@ export const env = {
   // Vercel Cron — bearer token the cron trigger sends on GET /api/embeddings/discover.
   cronSecret: requireEnv("CRON_SECRET"),
 
+  // Victoria Trusted Health MCP — shared bearer token for the private,
+  // server-to-server MCP endpoint (/api/mcp). Never sent to the browser: the
+  // only caller is Vera's own server-side agent layer.
+  mcpAuthToken: requireEnv("MCP_AUTH_TOKEN"),
+
   // Google Maps / Places — same key powers the browser map (EPIC5-06) and the
   // server-side Places API (New) Text Search call from /api/clinics/search.
   // NEXT_PUBLIC_ because the Maps JS SDK reads it in the browser; on the server
