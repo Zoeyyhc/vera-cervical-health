@@ -221,7 +221,9 @@ Every judgment must be preceded by at least one screenshot. Never judge a criter
 - **DO NOT** use ESLint or Prettier — Biome is the sole linter/formatter
 - **DO NOT** add fonts other than Camera Plain Variable (with `ui-sans-serif, system-ui` fallback) — no Google Fonts
 - **DO NOT** use font weight 700 (bold) — maximum weight in the design system is 600
-- **DO NOT** add MCP server infrastructure in v1 — agent tools are inlined into Next.js API routes
+- **DO NOT** add MCP server infrastructure beyond the approved Victoria Trusted Health MCP — the RAG, News, and Events tools stay inlined into Next.js API routes. The one MCP server (`app/api/mcp`, `lib/mcp/`) is private, read-only, and server-to-server only; see `docs/trusted-health-mcp-v0.1.md` for its approved scope
+- **DO NOT** make the MCP endpoint reachable from the browser, give it a write tool, or let it fetch a user-supplied URL — `lib/mcp/no-write.test.ts` and `lib/mcp/auth.test.ts` enforce this
+- **DO NOT** copy, cache, or re-publish third-party clinic or provider records — the MCP returns first-party directory *deep links* only, and the no-`clinics`-table constraint above still holds
 
 ---
 
@@ -258,6 +260,8 @@ Required external accounts for full local dev: Supabase, Anthropic, OpenAI, Goog
 |---|---|
 | `docs/architecture.md` | Agent pipeline, RAG flow, tool call chain |
 | `docs/discovery-pipeline.md` | Gap-driven knowledge discovery: rag_gap capture, stages, thresholds, triggers |
+| `docs/trusted-health-mcp-v0.1.md` | Victoria Trusted Health MCP — approved scope, tool contracts, governance |
+| `docs/trusted-health-mcp.md` | Same MCP — implementation, file map, admin operations, security posture |
 | `docs/database.md` | Full schema reference, RLS roles, pgvector setup |
 | `docs/api-routes.md` | All API routes with auth requirements |
 | `docs/env-vars.md` | All environment variables with provider links |
