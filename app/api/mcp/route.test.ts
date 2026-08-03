@@ -68,7 +68,9 @@ describe("POST /api/mcp", () => {
   });
 
   test("rejects a browser request even when it carries a valid token", async () => {
-    const res = await POST(req({ ...AUTH, "sec-fetch-mode": "cors" }));
+    // `sec-fetch-site` rather than `sec-fetch-mode`: Node's own HTTP stack
+    // sends the latter, so it never marked a browser. See lib/mcp/auth.ts.
+    const res = await POST(req({ ...AUTH, "sec-fetch-site": "cross-site" }));
 
     expect(res.status).toBe(401);
     expect(createVeraMcpServer).not.toHaveBeenCalled();

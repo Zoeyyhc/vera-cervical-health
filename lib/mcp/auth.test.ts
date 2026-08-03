@@ -47,16 +47,26 @@ describe("authenticateMcpRequest", () => {
     );
   });
 
-  test.each(["sec-fetch-mode", "sec-fetch-site"])(
-    "rejects a request carrying %s, even with a valid token",
-    (header) => {
-      const request = req({ authorization: `Bearer ${TOKEN}`, [header]: "cors" });
-      expect(authenticateMcpRequest(request, TOKEN)).toBe("browser_origin");
-    }
-  );
+  test.each([
+    ["sec-fetch-site", "cross-site"],
+    ["sec-fetch-dest", "empty"],
+    ["origin", "https://vera.test"],
+  ])("rejects a request carrying %s, even with a valid token", (header, value) => {
+    const request = req({ authorization: `Bearer ${TOKEN}`, [header]: value });
+    expect(authenticateMcpRequest(request, TOKEN)).toBe("browser_origin");
+  });
+
+  test("does not treat sec-fetch-mode as a browser signal — Node's own fetch sends it", () => {
+    // The bug this suite used to assert as correct: undici puts
+    // `Sec-Fetch-Mode: cors` on every request, so rejecting it rejected every
+    // agent-layer call. lib/mcp/auth.transport.test.ts pins that against the
+    // real transport; here we just pin the guard's half of the contract.
+    const request = req({ authorization: `Bearer ${TOKEN}`, "sec-fetch-mode": "cors" });
+    expect(authenticateMcpRequest(request, TOKEN)).toBeNull();
+  });
 
   test("the browser guard is checked before the token, so a browser never probes the token", () => {
-    const request = req({ authorization: "Bearer wrong", "sec-fetch-mode": "cors" });
+    const request = req({ authorization: "Bearer wrong", "sec-fetch-site": "cross-site" });
     expect(authenticateMcpRequest(request, TOKEN)).toBe("browser_origin");
   });
 });

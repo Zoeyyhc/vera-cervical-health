@@ -30,8 +30,12 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const CALL_TIMEOUT_MS = 5_000;
 
 function baseUrl(): string {
-  const configured = process.env.MCP_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL;
-  return (configured ?? "http://localhost:3000").replace(/\/$/, "");
+  // `??` is not enough here: a var that exists but holds an empty string — the
+  // shape a blank value in the Vercel dashboard takes — would pass the nullish
+  // check and leave us building `new URL("/api/mcp")`, which throws. Treat
+  // blank as unset so the default still applies.
+  const configured = process.env.MCP_BASE_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
+  return (configured || "http://localhost:3000").replace(/\/$/, "");
 }
 
 /**
@@ -40,7 +44,21 @@ function baseUrl(): string {
  * long-lived client would add reconnect handling for no measurable gain.
  */
 async function callTool(name: string, args: Record<string, unknown>): Promise<unknown | null> {
-  const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl()}/api/mcp`), {
+  // Built inside its own guard, not as an argument further down: `new URL` on a
+  // misconfigured base throws synchronously, and a throw here would escape the
+  // "never throws" contract below and abort the whole chat turn rather than
+  // degrading to RAG.
+  let endpoint: URL;
+  try {
+    endpoint = new URL(`${baseUrl()}/api/mcp`);
+  } catch {
+    console.warn(
+      `[mcp/client] ${name} skipped: MCP_BASE_URL / NEXT_PUBLIC_APP_URL is not a valid absolute URL`
+    );
+    return null;
+  }
+
+  const transport = new StreamableHTTPClientTransport(endpoint, {
     requestInit: {
       headers: { authorization: `Bearer ${env.mcpAuthToken}` },
     },

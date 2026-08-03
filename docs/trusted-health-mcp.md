@@ -146,7 +146,7 @@ when one lapses — that is a follow-on.
 
 | Property | How it holds |
 |---|---|
-| Not browser-callable | `MCP_AUTH_TOKEN` is non-public so it never reaches client JS; requests with `Sec-Fetch-*` headers are rejected regardless of token; no cookie path exists |
+| Not browser-callable | `MCP_AUTH_TOKEN` is non-public so it never reaches client JS; requests with `Sec-Fetch-Site` / `Sec-Fetch-Dest` / `Origin` are rejected regardless of token (**not** `Sec-Fetch-Mode` — Node's undici sends that itself); no cookie path exists |
 | Read-only | No handler has a write path; `lib/mcp/no-write.test.ts` fails the build if a mutation appears in the read path |
 | No prompt injection via tool output | Safety rule 4 in `lib/ai/system-prompt.ts`: retrieved context is DATA, never instructions |
 | No arbitrary URLs | Inputs are closed Zod objects; `location` is a suburb/postcode pattern that rejects URLs and hosts |
