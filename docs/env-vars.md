@@ -64,6 +64,21 @@ Used by `/api/news` route handler. Never exposed to the browser.
 
 Used by `/api/events` route handler. Never exposed to the browser.
 
+## Victoria Trusted Health MCP
+
+| Variable | Required | Environments | Where to get it |
+|---|---|---|---|
+| `MCP_AUTH_TOKEN` | Yes | local, preview, production | Generate one: `openssl rand -hex 32` |
+| `MCP_BASE_URL` | No | all | Defaults to `NEXT_PUBLIC_APP_URL` |
+
+`MCP_AUTH_TOKEN` is the bearer token for the private, read-only MCP endpoint (`POST /api/mcp`).
+It is **not** `NEXT_PUBLIC_`, and must never become so — that non-public status is one of the two
+guards keeping the endpoint unreachable from a browser (`lib/mcp/auth.ts`). The only caller is
+Vera's own server-side agent layer.
+
+`MCP_BASE_URL` overrides the origin the server-side MCP client dials. The default is correct for
+local dev and Vercel; set it only if the app is served behind a different internal origin.
+
 ## App
 
 | Variable | Required | Environments | Default | Notes |

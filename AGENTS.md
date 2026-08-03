@@ -1,6 +1,6 @@
 # Vera
 
-A solo-built cervical health education platform with an AI-powered Q&A assistant, clinic finder, health information hub, and admin dashboard. Built on Next.js 14 + Supabase + Claude Sonnet multi-agent architecture.
+A solo-built cervical health education platform with an AI-powered Q&A assistant, clinic finder, health information hub, and admin dashboard. Built on Next.js 14 + Supabase + Codex Sonnet multi-agent architecture.
 
 ---
 
@@ -13,7 +13,7 @@ A solo-built cervical health education platform with an AI-powered Q&A assistant
 | State | Zustand |
 | Database | Supabase (PostgreSQL + pgvector) |
 | Auth | Supabase Auth (email/password + Google OAuth) |
-| AI | Claude Sonnet 4.6 via `@anthropic-ai/sdk` |
+| AI | Codex Sonnet 4.6 via `@anthropic-ai/sdk` |
 | Embeddings | OpenAI `text-embedding-3-small` |
 | Package manager | pnpm |
 | Linting | Biome |
@@ -79,7 +79,7 @@ cervix-assistant/
 │   │   ├── news-agent.ts
 │   │   ├── events-agent.ts
 │   │   └── response-agent.ts
-│   ├── tools/           # Claude tool definitions (one file per tool)
+│   ├── tools/           # Codex tool definitions (one file per tool)
 │   │   ├── health-kb.ts # retrieveHealthContext — pgvector similarity search
 │   │   ├── news.ts      # fetchHealthNews — NewsAPI
 │   │   └── events.ts    # findHealthEvents — SerpAPI
@@ -172,7 +172,7 @@ This applies to: Google Maps, NewsAPI, SerpAPI.
 - Each agent is a pure function: takes context, returns a typed result
 - One file per agent in `lib/agents/`; one file per tool in `lib/tools/`
 - No agent calls another agent directly — the Orchestrator coordinates
-- Claude model strings are hard-coded (not from env), one per use class in `lib/ai/anthropic.ts`: the user-facing response agent uses `CLAUDE_MODEL` (`claude-sonnet-4-6`); the intent classifier and discovery pipeline use the cheaper `CLAUDE_FAST_MODEL` (`claude-haiku-4-5`). Add a `pricing.ts` entry for any new model or its cost logging silently returns null.
+- All Codex API calls use model string `Codex-sonnet-4-6` (hard-coded, not from env)
 
 ### Database
 - All migrations in `supabase/migrations/` with sequential numbering

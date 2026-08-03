@@ -184,6 +184,59 @@ export type Database = {
           },
         ]
       }
+      directory_links: {
+        Row: {
+          confirmation_notice: string
+          coverage: string
+          created_at: string
+          directory_name: string
+          id: string
+          next_review_at: string | null
+          reviewed_at: string | null
+          search_url_template: string
+          sort_order: number
+          source_id: string
+          status: string
+          supports: string[]
+        }
+        Insert: {
+          confirmation_notice: string
+          coverage?: string
+          created_at?: string
+          directory_name: string
+          id?: string
+          next_review_at?: string | null
+          reviewed_at?: string | null
+          search_url_template: string
+          sort_order?: number
+          source_id: string
+          status?: string
+          supports?: string[]
+        }
+        Update: {
+          confirmation_notice?: string
+          coverage?: string
+          created_at?: string
+          directory_name?: string
+          id?: string
+          next_review_at?: string | null
+          reviewed_at?: string | null
+          search_url_template?: string
+          sort_order?: number
+          source_id?: string
+          status?: string
+          supports?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "directory_links_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "trusted_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discovery_runs: {
         Row: {
           candidates_staged: number
@@ -230,6 +283,7 @@ export type Database = {
           status: string
           summary: string | null
           title: string | null
+          trusted_source_id: string | null
         }
         Insert: {
           authority_score?: number | null
@@ -246,6 +300,7 @@ export type Database = {
           status?: string
           summary?: string | null
           title?: string | null
+          trusted_source_id?: string | null
         }
         Update: {
           authority_score?: number | null
@@ -262,6 +317,7 @@ export type Database = {
           status?: string
           summary?: string | null
           title?: string | null
+          trusted_source_id?: string | null
         }
         Relationships: [
           {
@@ -269,6 +325,13 @@ export type Database = {
             columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_candidates_trusted_source_id_fkey"
+            columns: ["trusted_source_id"]
+            isOneToOne: false
+            referencedRelation: "trusted_sources"
             referencedColumns: ["id"]
           },
         ]
@@ -387,6 +450,42 @@ export type Database = {
           },
         ]
       }
+      mcp_call_logs: {
+        Row: {
+          correlation_id: string
+          created_at: string
+          id: string
+          input_summary: Json
+          latency_ms: number
+          outcome: string
+          result_ids: string[]
+          source_ids: string[]
+          tool_name: string
+        }
+        Insert: {
+          correlation_id: string
+          created_at?: string
+          id?: string
+          input_summary?: Json
+          latency_ms: number
+          outcome: string
+          result_ids?: string[]
+          source_ids?: string[]
+          tool_name: string
+        }
+        Update: {
+          correlation_id?: string
+          created_at?: string
+          id?: string
+          input_summary?: Json
+          latency_ms?: number
+          outcome?: string
+          result_ids?: string[]
+          source_ids?: string[]
+          tool_name?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -422,6 +521,150 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      trusted_sources: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          canonical_host: string
+          created_at: string
+          id: string
+          jurisdiction: string
+          next_review_at: string | null
+          notes: string | null
+          organisation: string
+          permitted_content: string[]
+          reviewed_at: string | null
+          source_class: string
+          status: string
+          terms_url: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          canonical_host: string
+          created_at?: string
+          id?: string
+          jurisdiction: string
+          next_review_at?: string | null
+          notes?: string | null
+          organisation: string
+          permitted_content?: string[]
+          reviewed_at?: string | null
+          source_class: string
+          status?: string
+          terms_url?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          canonical_host?: string
+          created_at?: string
+          id?: string
+          jurisdiction?: string
+          next_review_at?: string | null
+          notes?: string | null
+          organisation?: string
+          permitted_content?: string[]
+          reviewed_at?: string | null
+          source_class?: string
+          status?: string
+          terms_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trusted_sources_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      verified_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          ends_at: string | null
+          expires_at: string | null
+          format: string
+          id: string
+          location_label: string
+          name: string
+          postcode: string | null
+          registration_url: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_id: string
+          source_url: string
+          starts_at: string
+          status: string
+          suburb: string | null
+          topic: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          expires_at?: string | null
+          format: string
+          id?: string
+          location_label: string
+          name: string
+          postcode?: string | null
+          registration_url: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_id: string
+          source_url: string
+          starts_at: string
+          status?: string
+          suburb?: string | null
+          topic?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          expires_at?: string | null
+          format?: string
+          id?: string
+          location_label?: string
+          name?: string
+          postcode?: string | null
+          registration_url?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_id?: string
+          source_url?: string
+          starts_at?: string
+          status?: string
+          suburb?: string | null
+          topic?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verified_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verified_events_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verified_events_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "trusted_sources"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

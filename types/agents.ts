@@ -3,12 +3,14 @@
  *
  * - `health_question` → RAG agent → response agent (Epic 4 wiring)
  * - `news_request` / `events_request` → external-tool agents (Epic 9)
+ * - `services_request` → Victoria Trusted Health MCP directory tool
  * - `general_chat` → response agent directly
  */
 export type Intent =
   | "health_question"
   | "news_request"
   | "events_request"
+  | "services_request"
   | "general_chat"
   | "injection_attempt";
 

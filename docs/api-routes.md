@@ -11,6 +11,7 @@ All route handlers are in `app/api/` using Next.js App Router conventions (`rout
 | `/api/clinics/search` | GET | None (public) | Proxy to Google Places API (New) — Text Search endpoint. |
 | `/api/news` | GET | None (public) | Proxy to NewsAPI. Keeps `NEWS_API_KEY` server-side. |
 | `/api/events` | GET | None (public) | Proxy to SerpAPI Google Events. Keeps `SERPAPI_KEY` server-side. |
+| `/api/mcp` | POST/GET/DELETE | `MCP_AUTH_TOKEN` bearer (server-to-server) | Private, read-only Victoria Trusted Health MCP endpoint. Never callable from a browser. |
 | `/api/embeddings/ingest` | POST | `admin` | Ingest a knowledge document into pgvector. |
 | `/api/analytics/event` | POST | `user` | Log an analytics event. |
 | `/api/admin/users` | GET | `admin` | List all users. |
@@ -60,6 +61,49 @@ All route handlers are in `app/api/` using Next.js App Router conventions (`rout
 **Proxied to:** SerpAPI Google Events (`SERPAPI_KEY` injected server-side)  
 **Default keywords appended:** `women's health cervical screening HPV`  
 **Response:** `HealthEvent[]` — `{ name, date, location, url, description }`
+
+### `POST /api/mcp`
+
+**Auth:** `Authorization: Bearer ${MCP_AUTH_TOKEN}` — service-to-service only.
+**Transport:** MCP Streamable HTTP (`WebStandardStreamableHTTPServerTransport`), stateless,
+`enableJsonResponse: true`. A fresh server + transport per request.
+**Tools (all read-only):** `search_victoria_health_info`, `find_victoria_screening_services`,
+`list_victoria_verified_events`. Contracts in `docs/trusted-health-mcp-v0.1.md` §5.
+**Caller:** `lib/mcp/client.ts` only, reached via `lib/agents/victoria-agent.ts`. 5-second
+timeout; any failure resolves to `null` so the chat route degrades rather than erroring.
+
+**Not browser-callable, by two independent guards** (`lib/mcp/auth.ts`):
+
+1. `MCP_AUTH_TOKEN` is a non-public env var, so it is never bundled into client JS.
+2. Any request carrying `Sec-Fetch-Mode` / `Sec-Fetch-Site` — headers a browser cannot suppress —
+   is rejected regardless of its token.
+
+There is deliberately **no** session-cookie path: being signed in, even as an admin, grants nothing here.
+Every rejection returns the same opaque `401 {"error":"unauthorized"}`.
+
+**Audit:** every call writes one `mcp_call_logs` row — tool name, sanitised input summary, result
+ids, source ids, outcome, latency, correlation id. Never the query text, the raw location, a user
+id, or a session id. Calls rejected by the tool schema are logged as `invalid_input` by the
+route's preflight (`lib/mcp/preflight.ts`).
+
+**Local check:**
+
+```bash
+TOKEN=$(grep MCP_AUTH_TOKEN .env.local | cut -d= -f2)
+curl -s -X POST http://localhost:3000/api/mcp \
+  -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+### `/admin/trusted-health` (page, not an API route)
+
+**Auth:** `admin` role (server-side gate via `requireAdmin`, enforced in `app/(app)/admin/layout.tsx`).
+**Purpose:** the governance surface for the MCP. Approve/revoke registry **sources**; add, approve,
+and reject **events**; approve/retire **directory links**. Events are created as `pending` and are
+invisible to the MCP until approved; expired events are shown here with an `expired` badge and are
+never returned by the MCP. Server actions live in `lib/mcp/admin-actions.ts`.
 
 ### `POST /api/embeddings/ingest`
 

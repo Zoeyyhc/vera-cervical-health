@@ -192,6 +192,20 @@ vi.mock("@/lib/agents/events-agent", () => ({
   runEventsAgent: vi.fn(),
 }));
 
+// Keeps these tests hermetic: without this the real Victoria agent would dial
+// the MCP endpoint over HTTP. Default behaviour is "MCP contributed nothing",
+// which is the fallback path these existing assertions describe. The MCP
+// dispatch paths have their own file, orchestrator-victoria.test.ts.
+vi.mock("@/lib/agents/victoria-agent", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/agents/victoria-agent")>();
+  return {
+    ...actual,
+    runVictoriaHealthAgent: vi.fn(async () => ({ context: "", sources: [] })),
+    runVictoriaServicesAgent: vi.fn(async () => ({ context: "", sources: [] })),
+    runVictoriaEventsAgent: vi.fn(async () => ({ context: "", sources: [] })),
+  };
+});
+
 vi.mock("@/lib/ai/abuse", () => ({
   recordAbuseEvent: vi.fn(),
 }));
