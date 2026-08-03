@@ -246,6 +246,13 @@ const baseCtx: OrchestratorContext = {
   history: [] as ChatHistoryMessage[],
 };
 
+/**
+ * What an assistant turn that asked "where are you?" records on itself. The
+ * follow-up bridge keys off this rather than the wording of the reply, so the
+ * copy can change without silently dropping every mid-retry conversation.
+ */
+const PENDING_EVENTS = { kind: "find_events", awaiting: "location" } as const;
+
 describe("runOrchestrator", () => {
   test("injection_attempt: refuses, records abuse, calls no sub-agent", async () => {
     vi.mocked(getAnthropicClient).mockReturnValue(
@@ -462,13 +469,13 @@ describe("runOrchestrator", () => {
       ]) as never
     );
 
-    const ctx: OrchestratorContext = { ...baseCtx, city: "Sydney" };
+    const ctx: OrchestratorContext = { ...baseCtx, userMessage: "any events in glen waverley" };
     const chunks = await collectOrchestrator(ctx);
 
     expect(runEventsAgent).toHaveBeenCalledTimes(1);
     expect(runEventsAgent).toHaveBeenCalledWith({
       userMessage: ctx.userMessage,
-      city: "Sydney",
+      city: "glen waverley",
     });
     expect(runResponseAgent).toHaveBeenCalledTimes(1);
     const callArg = vi.mocked(runResponseAgent).mock.calls[0][0];
@@ -481,41 +488,34 @@ describe("runOrchestrator", () => {
     ]);
   });
 
-  test("events_request with needsLocation: yields a 'which city?' fallback; skips response agent", async () => {
+  test("events_request with no location: asks where, and searches nothing", async () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("events_request") as never);
-    vi.mocked(runEventsAgent).mockResolvedValue({
-      eventsContext: "",
-      eventsSources: [],
-      needsLocation: true,
-    });
 
-    const chunks = await collectOrchestrator(baseCtx);
+    const chunks = await collectOrchestrator({ ...baseCtx, geolocationAttempted: true });
 
     expect(runResponseAgent).not.toHaveBeenCalled();
-    expect(chunks).toHaveLength(1);
-    if (chunks[0].type === "text") {
-      expect(chunks[0].text.toLowerCase()).toContain("city");
-    }
+    expect(runEventsAgent).not.toHaveBeenCalled();
+    expect(chunks[0]).toEqual({ type: "text", text: EVENTS_NEEDS_LOCATION_FALLBACK });
   });
 
   test("events_request with empty results (location was used): yields a fallback text chunk; skips response agent", async () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("events_request") as never);
     vi.mocked(runEventsAgent).mockResolvedValue({ eventsContext: "", eventsSources: [] });
 
-    const chunks = await collectOrchestrator({ ...baseCtx, city: "Sydney" });
+    const chunks = await collectOrchestrator({
+      ...baseCtx,
+      userMessage: "any events in glen waverley",
+    });
 
     expect(runResponseAgent).not.toHaveBeenCalled();
-    expect(chunks).toHaveLength(1);
-    if (chunks[0].type === "text") {
-      expect(chunks[0].text.toLowerCase()).toContain("events");
-    }
+    expect(chunks[0]).toEqual({ type: "text", text: EVENTS_EMPTY_FALLBACK });
   });
 
   test("events_request never calls runRagAgent", async () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("events_request") as never);
     vi.mocked(runEventsAgent).mockResolvedValue({ eventsContext: "", eventsSources: [] });
 
-    await collectOrchestrator({ ...baseCtx, city: "Sydney" });
+    await collectOrchestrator({ ...baseCtx, userMessage: "any events in glen waverley" });
 
     expect(runRagAgent).not.toHaveBeenCalled();
   });
@@ -544,7 +544,11 @@ describe("runOrchestrator", () => {
       userMessage: "melbourne",
       history: [
         { role: "user", content: "any events near me?" },
-        { role: "assistant", content: EVENTS_NEEDS_LOCATION_FALLBACK },
+        {
+          role: "assistant",
+          content: EVENTS_NEEDS_LOCATION_FALLBACK,
+          pendingAction: PENDING_EVENTS,
+        },
       ],
     };
     await collectOrchestrator(ctx);
@@ -570,7 +574,7 @@ describe("runOrchestrator", () => {
         { role: "user", content: "what events are happening near me?" },
         { role: "assistant", content: EVENTS_NEEDS_LOCATION_FALLBACK },
         { role: "user", content: "burwood east" },
-        { role: "assistant", content: EVENTS_EMPTY_FALLBACK },
+        { role: "assistant", content: EVENTS_EMPTY_FALLBACK, pendingAction: PENDING_EVENTS },
       ],
     };
     const chunks = await collectOrchestrator(ctx);
@@ -581,7 +585,7 @@ describe("runOrchestrator", () => {
     });
     // Still empty for Melbourne — but the honest fallback, not an ungrounded
     // improvisation from the response agent.
-    expect(chunks).toEqual([{ type: "text", text: EVENTS_EMPTY_FALLBACK }]);
+    expect(chunks[0]).toEqual({ type: "text", text: EVENTS_EMPTY_FALLBACK });
     expect(runResponseAgent).not.toHaveBeenCalled();
   });
 
@@ -596,13 +600,13 @@ describe("runOrchestrator", () => {
       userMessage: "3151",
       history: [
         { role: "user", content: "what events are happening near me?" },
-        { role: "assistant", content: EVENTS_EMPTY_FALLBACK },
+        { role: "assistant", content: EVENTS_EMPTY_FALLBACK, pendingAction: PENDING_EVENTS },
       ],
     };
     const chunks = await collectOrchestrator(ctx);
 
     expect(runEventsAgent).toHaveBeenCalledWith({ userMessage: "3151", city: "3151" });
-    expect(chunks).toEqual([{ type: "text", text: EVENTS_EMPTY_FALLBACK }]);
+    expect(chunks[0]).toEqual({ type: "text", text: EVENTS_EMPTY_FALLBACK });
     expect(runResponseAgent).not.toHaveBeenCalled();
   });
 
@@ -634,7 +638,11 @@ describe("runOrchestrator", () => {
       userMessage: "actually, tell me about HPV instead",
       history: [
         { role: "user", content: "any events near me?" },
-        { role: "assistant", content: EVENTS_NEEDS_LOCATION_FALLBACK },
+        {
+          role: "assistant",
+          content: EVENTS_NEEDS_LOCATION_FALLBACK,
+          pendingAction: PENDING_EVENTS,
+        },
       ],
     };
     await collectOrchestrator(ctx);

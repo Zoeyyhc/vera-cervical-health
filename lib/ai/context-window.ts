@@ -1,7 +1,17 @@
+import { type PendingAction, readPendingAction } from "@/lib/ai/pending-action";
 import type { Database } from "@/types/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type ChatHistoryMessage = { role: "user" | "assistant"; content: string };
+export type ChatHistoryMessage = {
+  role: "user" | "assistant";
+  content: string;
+  /**
+   * Set on an assistant turn that asked for something and is waiting for it.
+   * Not sent to Claude — `trimToBudget` costs only `content` — but read by the
+   * orchestrator to route the reply back into the request it belongs to.
+   */
+  pendingAction?: PendingAction | null;
+};
 
 /**
  * Default character budget for the messages array sent to Claude. Treated as an
@@ -63,7 +73,7 @@ export async function loadRecentMessages(
 ): Promise<ChatHistoryMessage[]> {
   const { data, error } = await supabase
     .from("chat_messages")
-    .select("role, content")
+    .select("role, content, metadata")
     .eq("session_id", sessionId)
     .order("created_at", { ascending: true });
 
@@ -76,6 +86,7 @@ export async function loadRecentMessages(
   const messages = (data ?? []).map((row) => ({
     role: row.role as "user" | "assistant",
     content: row.content,
+    pendingAction: readPendingAction(row.metadata),
   }));
 
   return trimToBudget(messages, budget);

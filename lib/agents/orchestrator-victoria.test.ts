@@ -34,6 +34,8 @@ vi.mock("@/lib/ai/rag-gap", async (importOriginal) => ({
 import { getAnthropicClient } from "@/lib/ai/anthropic";
 import { runEventsAgent } from "./events-agent";
 import {
+  EVENTS_NEEDS_LOCATION_FALLBACK,
+  EVENTS_OUTSIDE_VICTORIA_FALLBACK,
   type OrchestratorContext,
   SERVICES_EMPTY_FALLBACK,
   SERVICES_NEEDS_LOCATION_FALLBACK,
@@ -76,6 +78,10 @@ async function collect(ctx: OrchestratorContext): Promise<AgentChunk[]> {
 
 const MCP_SILENT = { context: "", sources: [] };
 
+/** A state-bearing fix is what confirms a location; a bare suburb is not. */
+const VIC_FIX = { suburb: "Melbourne", state: "VIC", postcode: "3000" };
+const NSW_FIX = { suburb: "Sydney", state: "NSW", postcode: "2000" };
+
 const VIC_SOURCE = {
   id: "1",
   title: "healthdirect Service Finder",
@@ -101,42 +107,77 @@ describe("services_request", () => {
       sources: [VIC_SOURCE],
     });
 
-    await collect({ userMessage: "where can I get screened", history: [], city: "Carlton" });
+    await collect({ userMessage: "where can I get screened in glen waverley", history: [] });
 
     const ctx = vi.mocked(runResponseAgent).mock.calls[0][0];
     expect(ctx.groundingContext).toContain("Approved Victorian screening-service directories");
     expect(ctx.groundingSources).toEqual([VIC_SOURCE]);
   });
 
-  test("asks for a location when the agent has none", async () => {
+  test("asks for a location when the turn names none, without calling the MCP", async () => {
     classifyAs("services_request");
-    vi.mocked(runVictoriaServicesAgent).mockResolvedValue({ ...MCP_SILENT, needsLocation: true });
 
     const chunks = await collect({ userMessage: "where can I get screened", history: [] });
 
-    expect(chunks).toEqual([{ type: "text", text: SERVICES_NEEDS_LOCATION_FALLBACK }]);
+    expect(chunks[0]).toEqual({ type: "text", text: SERVICES_NEEDS_LOCATION_FALLBACK });
+    expect(runVictoriaServicesAgent).not.toHaveBeenCalled();
     expect(runResponseAgent).not.toHaveBeenCalled();
+  });
+
+  test("refuses to guess a suburb name that another state also uses", async () => {
+    classifyAs("services_request");
+
+    const chunks = await collect({
+      userMessage: "where can I get screened in burwood",
+      history: [],
+    });
+
+    const text = chunks[0];
+    expect(text.type).toBe("text");
+    if (text.type === "text") {
+      expect(text.text).toContain("Burwood");
+      expect(text.text).toContain("New South Wales");
+      expect(text.text).toContain("Victoria");
+    }
+    // The whole point: no tool call happens on a guess.
+    expect(runVictoriaServicesAgent).not.toHaveBeenCalled();
+    expect(runResponseAgent).not.toHaveBeenCalled();
+  });
+
+  test("accepts a shared suburb name once the state is given", async () => {
+    classifyAs("services_request");
+    vi.mocked(runVictoriaServicesAgent).mockResolvedValue({
+      context: "[1] healthdirect …",
+      sources: [VIC_SOURCE],
+    });
+
+    await collect({ userMessage: "where can I get screened in burwood vic", history: [] });
+
+    expect(runVictoriaServicesAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ location: "burwood" })
+    );
   });
 
   test("explains the Victorian scope instead of widening the search", async () => {
     classifyAs("services_request");
-    vi.mocked(runVictoriaServicesAgent).mockResolvedValue({
-      ...MCP_SILENT,
-      outsideVictoria: true,
+
+    const chunks = await collect({
+      userMessage: "clinics near me",
+      history: [],
+      geo: { suburb: "Bondi", state: "NSW", postcode: "2026" },
     });
 
-    const chunks = await collect({ userMessage: "clinics near me", history: [], city: "Sydney" });
-
     expect(chunks).toEqual([{ type: "text", text: SERVICES_OUTSIDE_VICTORIA_FALLBACK }]);
+    expect(runVictoriaServicesAgent).not.toHaveBeenCalled();
   });
 
   test("falls back to a static message when the MCP is unavailable", async () => {
     classifyAs("services_request");
     vi.mocked(runVictoriaServicesAgent).mockResolvedValue(MCP_SILENT);
 
-    const chunks = await collect({ userMessage: "clinics", history: [], city: "Carlton" });
+    const chunks = await collect({ userMessage: "clinics in glen waverley", history: [] });
 
-    expect(chunks).toEqual([{ type: "text", text: SERVICES_EMPTY_FALLBACK }]);
+    expect(chunks[0]).toEqual({ type: "text", text: SERVICES_EMPTY_FALLBACK });
   });
 
   test("bridges a bare postcode reply to the location prompt", async () => {
@@ -148,11 +189,17 @@ describe("services_request", () => {
 
     await collect({
       userMessage: "3053",
-      history: [{ role: "assistant", content: SERVICES_NEEDS_LOCATION_FALLBACK }],
+      history: [
+        {
+          role: "assistant",
+          content: SERVICES_NEEDS_LOCATION_FALLBACK,
+          pendingAction: { kind: "find_services", awaiting: "location" },
+        },
+      ],
     });
 
     expect(runVictoriaServicesAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ city: "3053" })
+      expect.objectContaining({ location: "3053" })
     );
   });
 
@@ -177,7 +224,7 @@ describe("services_request", () => {
     });
 
     expect(runVictoriaServicesAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ city: "burwood east" })
+      expect.objectContaining({ location: "burwood east" })
     );
     expect(runResponseAgent).toHaveBeenCalledTimes(1);
   });
@@ -216,7 +263,7 @@ describe("health_question", () => {
       sources: [mcpSource],
     });
 
-    await collect({ userMessage: "when should I screen", history: [], city: "Melbourne" });
+    await collect({ userMessage: "when should I screen", history: [], geo: VIC_FIX });
 
     const ctx = vi.mocked(runResponseAgent).mock.calls[0][0];
     expect(ctx.groundingContext).toBe("[1] governed excerpt");
@@ -227,7 +274,7 @@ describe("health_question", () => {
     classifyAs("health_question");
     vi.mocked(runVictoriaHealthAgent).mockResolvedValue(MCP_SILENT);
 
-    await collect({ userMessage: "when should I screen", history: [], city: "Melbourne" });
+    await collect({ userMessage: "when should I screen", history: [], geo: VIC_FIX });
 
     expect(vi.mocked(runResponseAgent).mock.calls[0][0].groundingContext).toBe("rag");
   });
@@ -235,7 +282,7 @@ describe("health_question", () => {
   test("does not consult the MCP for a non-Victorian turn", async () => {
     classifyAs("health_question");
 
-    await collect({ userMessage: "when should I screen", history: [], city: "Sydney" });
+    await collect({ userMessage: "when should I screen", history: [], geo: NSW_FIX });
 
     expect(runVictoriaHealthAgent).not.toHaveBeenCalled();
     expect(vi.mocked(runResponseAgent).mock.calls[0][0].groundingContext).toBe("rag");
@@ -259,7 +306,7 @@ describe("health_question", () => {
     });
 
     const { recordRagGap } = await import("@/lib/ai/rag-gap");
-    await collect({ userMessage: "obscure question", history: [], city: "Melbourne" });
+    await collect({ userMessage: "obscure question", history: [], geo: VIC_FIX });
 
     expect(recordRagGap).toHaveBeenCalled();
   });
@@ -279,7 +326,7 @@ describe("events_request", () => {
       sources: [eventSource],
     });
 
-    await collect({ userMessage: "any events", history: [], city: "Carlton" });
+    await collect({ userMessage: "any events in glen waverley", history: [] });
 
     expect(runEventsAgent).not.toHaveBeenCalled();
     const ctx = vi.mocked(runResponseAgent).mock.calls[0][0];
@@ -295,7 +342,7 @@ describe("events_request", () => {
       eventsSources: [{ id: "1", title: "Some event", chunkId: "events:https://x.test" }],
     });
 
-    await collect({ userMessage: "any events", history: [], city: "Carlton" });
+    await collect({ userMessage: "any events in glen waverley", history: [] });
 
     expect(runEventsAgent).toHaveBeenCalled();
     expect(vi.mocked(runResponseAgent).mock.calls[0][0].groundingContext).toContain(
@@ -303,17 +350,181 @@ describe("events_request", () => {
     );
   });
 
-  test("a non-Victorian events request is unaffected by the MCP", async () => {
+  test("a statewide question may be answered without knowing the user's suburb", async () => {
     classifyAs("events_request");
-    vi.mocked(runVictoriaEventsAgent).mockResolvedValue({ ...MCP_SILENT, outsideVictoria: true });
-    vi.mocked(runEventsAgent).mockResolvedValue({
-      eventsContext: "[1] Sydney event",
-      eventsSources: [{ id: "1", title: "Sydney event", chunkId: "events:https://x.test" }],
+    vi.mocked(runVictoriaEventsAgent).mockResolvedValue({
+      context: "[1] Statewide session",
+      sources: [{ id: "1", title: "Statewide session", chunkId: "vic-events:e2" }],
     });
 
-    await collect({ userMessage: "any events", history: [], city: "Sydney" });
+    await collect({ userMessage: "what health events are on in victoria?", history: [] });
 
-    expect(runEventsAgent).toHaveBeenCalled();
+    // No location: that is precisely what a statewide query asks the MCP for.
+    expect(runVictoriaEventsAgent).toHaveBeenCalledWith({
+      userMessage: "what health events are on in victoria?",
+    });
+  });
+
+  test("explains the Victorian scope rather than reporting an empty search", async () => {
+    // The old path ignored outsideVictoria, fell through to SerpAPI, and
+    // rendered its empty result as "I couldn't find any upcoming health events
+    // for that location" — a sentence about a search that was never run for
+    // this user. Say what is actually true instead.
+    classifyAs("events_request");
+
+    const chunks = await collect({ userMessage: "any events in sydney nsw", history: [] });
+
+    expect(chunks).toEqual([{ type: "text", text: EVENTS_OUTSIDE_VICTORIA_FALLBACK }]);
+    expect(runVictoriaEventsAgent).not.toHaveBeenCalled();
+    expect(runEventsAgent).not.toHaveBeenCalled();
+  });
+
+  test.each(["any events in burwood", "any events in richmond"])(
+    "refuses to guess the state for %s, and calls nothing",
+    async (userMessage) => {
+      classifyAs("events_request");
+
+      const chunks = await collect({ userMessage, history: [] });
+
+      const text = chunks[0];
+      expect(text.type).toBe("text");
+      if (text.type === "text") expect(text.text).toContain("postcode");
+      expect(runVictoriaEventsAgent).not.toHaveBeenCalled();
+      expect(runEventsAgent).not.toHaveBeenCalled();
+    }
+  );
+
+  test("asks the browser before asking the user, on a nearby question", async () => {
+    classifyAs("events_request");
+
+    const chunks = await collect({ userMessage: "any events near me?", history: [] });
+
+    // Nothing is said and nothing is searched: the client raises the permission
+    // prompt and resends the turn with whatever it resolves.
+    expect(chunks).toEqual([
+      {
+        type: "pending_action",
+        action: { kind: "find_events", awaiting: "location", scope: "nearby", geolocation: true },
+      },
+    ]);
+    expect(runVictoriaEventsAgent).not.toHaveBeenCalled();
+    expect(runEventsAgent).not.toHaveBeenCalled();
+  });
+
+  test("asks the user to type a suburb once the browser has failed", async () => {
+    classifyAs("events_request");
+
+    const chunks = await collect({
+      userMessage: "any events near me?",
+      history: [],
+      geolocationAttempted: true,
+    });
+
+    // A denied or timed-out permission must never surface as "no events found".
+    expect(chunks[0]).toEqual({ type: "text", text: EVENTS_NEEDS_LOCATION_FALLBACK });
+    expect(runVictoriaEventsAgent).not.toHaveBeenCalled();
+    expect(runEventsAgent).not.toHaveBeenCalled();
+  });
+
+  test("uses a Victorian fix from the browser on a nearby question", async () => {
+    classifyAs("events_request");
+    vi.mocked(runVictoriaEventsAgent).mockResolvedValue({
+      context: "[1] Session",
+      sources: [{ id: "1", title: "Session", chunkId: "vic-events:e1" }],
+    });
+
+    await collect({
+      userMessage: "any events near me?",
+      history: [],
+      geo: { suburb: "Burwood", state: "VIC", postcode: "3125" },
+      geolocationAttempted: true,
+    });
+
+    expect(runVictoriaEventsAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ location: "3125" })
+    );
+  });
+
+  test("takes a typed state over a conflicting browser fix", async () => {
+    classifyAs("events_request");
+
+    const chunks = await collect({
+      userMessage: "any events in burwood nsw",
+      history: [],
+      geo: { suburb: "Carlton", state: "VIC", postcode: "3053" },
+    });
+
+    expect(chunks).toEqual([{ type: "text", text: EVENTS_OUTSIDE_VICTORIA_FALLBACK }]);
+  });
+
+  test("resumes the events request from a pending action, not from the wording", async () => {
+    classifyAs("general_chat");
+    vi.mocked(runVictoriaEventsAgent).mockResolvedValue({
+      context: "[1] Session",
+      sources: [{ id: "1", title: "Session", chunkId: "vic-events:e1" }],
+    });
+
+    await collect({
+      userMessage: "3151",
+      history: [
+        { role: "user", content: "any events near me?" },
+        {
+          role: "assistant",
+          content: "some wording nothing in the codebase matches",
+          pendingAction: { kind: "find_events", awaiting: "location", scope: "nearby" },
+        },
+      ],
+    });
+
+    expect(runVictoriaEventsAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ location: "3151" })
+    );
+  });
+
+  test.each(["VIC", "Burwood Victoria", "burwood 3125"])(
+    "resumes from the location reply %s",
+    async (userMessage) => {
+      classifyAs("general_chat");
+      vi.mocked(runVictoriaEventsAgent).mockResolvedValue({
+        context: "[1] Session",
+        sources: [{ id: "1", title: "Session", chunkId: "vic-events:e1" }],
+      });
+
+      await collect({
+        userMessage,
+        history: [
+          { role: "user", content: "any events near me?" },
+          {
+            role: "assistant",
+            content: EVENTS_NEEDS_LOCATION_FALLBACK,
+            pendingAction: { kind: "find_events", awaiting: "location", scope: "nearby" },
+          },
+        ],
+      });
+
+      expect(runVictoriaEventsAgent).toHaveBeenCalled();
+    }
+  );
+
+  test("a resumed nearby request does not ask the browser again", async () => {
+    classifyAs("general_chat");
+
+    const chunks = await collect({
+      userMessage: "burwood",
+      history: [
+        {
+          role: "assistant",
+          content: EVENTS_NEEDS_LOCATION_FALLBACK,
+          pendingAction: { kind: "find_events", awaiting: "location", scope: "nearby" },
+        },
+      ],
+    });
+
+    // "burwood" is still ambiguous, so it asks which state — but it must not
+    // re-open the geolocation prompt the user already dealt with.
+    const text = chunks[0];
+    expect(text.type).toBe("text");
+    expect(chunks.some((c) => c.type === "pending_action" && c.action.geolocation)).toBe(false);
   });
 });
 

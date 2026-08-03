@@ -71,7 +71,7 @@ describe("trimToBudget", () => {
 });
 
 function mockSupabaseSelect(
-  rows: Array<{ role: string; content: string }> | null,
+  rows: Array<{ role: string; content: string; metadata?: unknown }> | null,
   error: Error | null = null
 ) {
   const order = vi.fn().mockResolvedValue({ data: rows, error });
@@ -83,6 +83,44 @@ function mockSupabaseSelect(
 }
 
 describe("loadRecentMessages", () => {
+  it("carries a pending action off the message that recorded it", async () => {
+    // This is what keeps a location follow-up on-path. Without it the
+    // orchestrator is back to matching the previous turn's wording.
+    const { supabase } = mockSupabaseSelect([
+      { role: "user", content: "any events near me?" },
+      {
+        role: "assistant",
+        content: "Which suburb and state are you in?",
+        metadata: { pendingAction: { kind: "find_events", awaiting: "location", scope: "nearby" } },
+      },
+    ]);
+
+    const result = await loadRecentMessages(supabase, "session-x", 1000);
+
+    expect(result[1].pendingAction).toEqual({
+      kind: "find_events",
+      awaiting: "location",
+      scope: "nearby",
+    });
+  });
+
+  it("ignores metadata that is missing or the wrong shape", async () => {
+    // The column is untyped jsonb and predates this feature, so a bad value is
+    // "no pending action" — dropping a retry beats failing the turn.
+    const { supabase } = mockSupabaseSelect([
+      // Leading user turn: trimToBudget drops a leading assistant message,
+      // which would empty this fixture before the assertion ran.
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "a", metadata: null },
+      { role: "assistant", content: "b", metadata: { pendingAction: { kind: "nonsense" } } },
+      { role: "assistant", content: "c", metadata: "not an object" },
+    ]);
+
+    const result = await loadRecentMessages(supabase, "session-x", 1000);
+
+    expect(result.map((m) => m.pendingAction)).toEqual([null, null, null, null]);
+  });
+
   it("queries chat_messages by session_id ordered by created_at ASC", async () => {
     const { supabase, from, select, eq, order } = mockSupabaseSelect([
       { role: "user", content: "hi" },
@@ -92,12 +130,12 @@ describe("loadRecentMessages", () => {
     const result = await loadRecentMessages(supabase, "session-x", 1000);
 
     expect(from).toHaveBeenCalledWith("chat_messages");
-    expect(select).toHaveBeenCalledWith("role, content");
+    expect(select).toHaveBeenCalledWith("role, content, metadata");
     expect(eq).toHaveBeenCalledWith("session_id", "session-x");
     expect(order).toHaveBeenCalledWith("created_at", { ascending: true });
     expect(result).toEqual([
-      { role: "user", content: "hi" },
-      { role: "assistant", content: "hello" },
+      { role: "user", content: "hi", pendingAction: null },
+      { role: "assistant", content: "hello", pendingAction: null },
     ]);
   });
 
@@ -114,13 +152,13 @@ describe("loadRecentMessages", () => {
       { role: "user", content: "cccccccccc" }, // 10
     ]);
     const result = await loadRecentMessages(supabase, "s", 10);
-    expect(result).toEqual([{ role: "user", content: "cccccccccc" }]);
+    expect(result).toEqual([{ role: "user", content: "cccccccccc", pendingAction: null }]);
   });
 
   it("uses BUDGET_CHARS by default when no budget is passed", async () => {
     const { supabase } = mockSupabaseSelect([{ role: "user", content: "hi" }]);
     const result = await loadRecentMessages(supabase, "s");
-    expect(result).toEqual([{ role: "user", content: "hi" }]);
+    expect(result).toEqual([{ role: "user", content: "hi", pendingAction: null }]);
   });
 
   it("throws if the underlying query errors", async () => {

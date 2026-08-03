@@ -14,12 +14,16 @@ import {
   searchVictoriaHealthInfoViaMcp,
 } from "@/lib/mcp/client";
 import {
-  isVictorianTurn,
-  resolveTurnLocation,
   runVictoriaEventsAgent,
   runVictoriaHealthAgent,
   runVictoriaServicesAgent,
 } from "./victoria-agent";
+
+/**
+ * Location extraction and scope used to live here. It now sits in
+ * `lib/agents/location.ts`, so these agents receive a location the caller has
+ * already confirmed — see `location.test.ts` for the resolution rules.
+ */
 
 const HEALTH_ITEM = {
   id: "c1",
@@ -57,75 +61,16 @@ const EVENT = {
   expiresAt: "2026-09-01T12:00:00+10:00",
 };
 
-describe("resolveTurnLocation", () => {
-  test("prefers the geolocated city over the message", () => {
-    expect(resolveTurnLocation({ userMessage: "clinics in Sydney", city: "Melbourne" })).toBe(
-      "Melbourne"
-    );
-  });
-
-  test("falls back to a place mentioned in the message", () => {
-    expect(resolveTurnLocation({ userMessage: "where can I get screened in Geelong" })).toBe(
-      "Geelong"
-    );
-  });
-
-  test("picks up a bare postcode in the message", () => {
-    expect(resolveTurnLocation({ userMessage: "any clinics near 3053" })).toBe("3053");
-  });
-
-  test("returns null when there is no location at all", () => {
-    expect(resolveTurnLocation({ userMessage: "where can I get screened" })).toBeNull();
-  });
-
-  // Nobody capitalises suburb names while typing into a chat box. Requiring it
-  // sends a real Victorian user to the "which suburb are you in?" prompt for a
-  // message that already named their suburb.
-  test("extracts a lowercase Victorian suburb", () => {
-    expect(
-      resolveTurnLocation({ userMessage: "where can I get cervical screening in burwood east?" })
-    ).toBe("burwood east");
-  });
-
-  test("extracts a lowercase single-word Victorian locality", () => {
-    expect(resolveTurnLocation({ userMessage: "where can I get screened in geelong" })).toBe(
-      "geelong"
-    );
-  });
-
-  // The capital letter was doing real work: it marked a proper noun. Dropping it
-  // must not turn every word after a preposition into a place.
-  test.each([
-    "can I get screened in the morning",
-    "what happens in a screening test",
-    "any events near me",
-  ])("does not mistake %s for a location", (userMessage) => {
-    expect(resolveTurnLocation({ userMessage })).toBeNull();
-  });
-
-  test("still returns a capitalised non-Victorian place, so the scope reply stays specific", () => {
-    expect(resolveTurnLocation({ userMessage: "clinics in Sydney" })).toBe("Sydney");
-  });
-});
-
-describe("isVictorianTurn", () => {
-  test("is true for a Victorian city and false elsewhere", () => {
-    expect(isVictorianTurn({ userMessage: "what is HPV", city: "Melbourne" })).toBe(true);
-    expect(isVictorianTurn({ userMessage: "what is HPV", city: "Sydney" })).toBe(false);
-  });
-
-  test("is false when no location is known — the MCP is not consulted", () => {
-    expect(isVictorianTurn({ userMessage: "what is HPV" })).toBe(false);
-  });
-});
-
 describe("runVictoriaHealthAgent", () => {
   beforeEach(() => vi.clearAllMocks());
 
   test("shapes items into numbered context with matching sources", async () => {
     vi.mocked(searchVictoriaHealthInfoViaMcp).mockResolvedValue({ items: [HEALTH_ITEM] });
 
-    const result = await runVictoriaHealthAgent({ userMessage: "screening", city: "Melbourne" });
+    const result = await runVictoriaHealthAgent({
+      userMessage: "screening",
+      location: "melbourne",
+    });
 
     expect(result.sources).toEqual([
       {
@@ -143,7 +88,10 @@ describe("runVictoriaHealthAgent", () => {
   test("degrades to an empty result when the MCP is unavailable", async () => {
     vi.mocked(searchVictoriaHealthInfoViaMcp).mockResolvedValue(null);
 
-    const result = await runVictoriaHealthAgent({ userMessage: "screening", city: "Melbourne" });
+    const result = await runVictoriaHealthAgent({
+      userMessage: "screening",
+      location: "melbourne",
+    });
 
     expect(result).toEqual({ context: "", sources: [] });
   });
@@ -171,7 +119,7 @@ describe("runVictoriaServicesAgent", () => {
 
     const result = await runVictoriaServicesAgent({
       userMessage: "where can I get screened",
-      city: "Carlton",
+      location: "carlton",
     });
 
     expect(result.context).toContain("DIRECTORY LISTING");
@@ -179,27 +127,19 @@ describe("runVictoriaServicesAgent", () => {
     expect(result.sources[0].chunkId).toBe(`vic-directory:${DIRECTORY_LINK.searchUrl}`);
   });
 
-  test("asks for a location when none can be resolved, without calling the MCP", async () => {
+  test("does not call the MCP without a location", async () => {
+    // The caller resolves and confirms scope; reaching here with nothing is a
+    // caller bug, and guessing a location would be the wrong way to cover it.
     const result = await runVictoriaServicesAgent({ userMessage: "where can I get screened" });
 
-    expect(result.needsLocation).toBe(true);
-    expect(findVictoriaScreeningServicesViaMcp).not.toHaveBeenCalled();
-  });
-
-  test("flags an out-of-Victoria location without calling the MCP", async () => {
-    const result = await runVictoriaServicesAgent({
-      userMessage: "clinics near me",
-      city: "Sydney",
-    });
-
-    expect(result.outsideVictoria).toBe(true);
+    expect(result).toEqual({ context: "", sources: [] });
     expect(findVictoriaScreeningServicesViaMcp).not.toHaveBeenCalled();
   });
 
   test("degrades when the MCP is unavailable", async () => {
     vi.mocked(findVictoriaScreeningServicesViaMcp).mockResolvedValue(null);
 
-    const result = await runVictoriaServicesAgent({ userMessage: "clinics", city: "Carlton" });
+    const result = await runVictoriaServicesAgent({ userMessage: "clinics", location: "carlton" });
 
     expect(result).toEqual({ context: "", sources: [] });
   });
@@ -211,7 +151,7 @@ describe("runVictoriaEventsAgent", () => {
   test("shapes events with organiser, dates, and registration link", async () => {
     vi.mocked(listVictoriaVerifiedEventsViaMcp).mockResolvedValue({ events: [EVENT] });
 
-    const result = await runVictoriaEventsAgent({ userMessage: "events", city: "Carlton" });
+    const result = await runVictoriaEventsAgent({ userMessage: "events", location: "carlton" });
 
     expect(result.context).toContain("Screening information session");
     expect(result.context).toContain("Cancer Council Victoria");
@@ -227,17 +167,10 @@ describe("runVictoriaEventsAgent", () => {
     expect(listVictoriaVerifiedEventsViaMcp).toHaveBeenCalledWith({});
   });
 
-  test("skips the MCP for a non-Victorian location", async () => {
-    const result = await runVictoriaEventsAgent({ userMessage: "events", city: "Brisbane" });
-
-    expect(result.outsideVictoria).toBe(true);
-    expect(listVictoriaVerifiedEventsViaMcp).not.toHaveBeenCalled();
-  });
-
   test("degrades when the MCP is unavailable", async () => {
     vi.mocked(listVictoriaVerifiedEventsViaMcp).mockResolvedValue(null);
 
-    expect(await runVictoriaEventsAgent({ userMessage: "events", city: "Carlton" })).toEqual({
+    expect(await runVictoriaEventsAgent({ userMessage: "events", location: "carlton" })).toEqual({
       context: "",
       sources: [],
     });

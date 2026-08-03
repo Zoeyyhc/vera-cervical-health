@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { parseChatStream } from "@/lib/ai/streaming";
-import { useUserCity } from "@/lib/hooks/use-user-city";
+import { type GeoFix, useGeoFix } from "@/lib/hooks/use-geo-fix";
 import type { Source } from "@/types/agents";
 import { Loader2Icon, SendIcon } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -40,7 +40,7 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const city = useUserCity();
+  const geoFix = useGeoFix();
 
   // Auto-scroll to bottom on every messages change (covers both the optimistic
   // append and every per-token append during streaming). The body only reads
@@ -83,46 +83,7 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
 
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: trimmed,
-          sessionId: sessionId ?? undefined,
-          city: city ?? undefined,
-        }),
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      for await (const event of parseChatStream(response.body)) {
-        if (event.type === "start") {
-          if (sessionId === null) {
-            window.history.replaceState({}, "", `/chat/${event.sessionId}`);
-          }
-          setSessionId(event.sessionId);
-        } else if (event.type === "text") {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + event.text } : m))
-          );
-        } else if (event.type === "sources") {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, sources: event.sources } : m))
-          );
-        } else if (event.type === "done") {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, status: "complete" } : m))
-          );
-          if (wasNewSession) router.refresh();
-        } else {
-          toast.error(event.message || "Something went wrong");
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, status: "error" } : m))
-          );
-        }
-      }
+      await streamTurn(trimmed, assistantId, wasNewSession, {});
     } catch (err) {
       const message = err instanceof Error ? err.message : "Couldn't reach the chat service";
       toast.error(message);
@@ -132,6 +93,88 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
     } finally {
       setIsStreaming(false);
     }
+  }
+
+  type TurnOptions = {
+    geo?: GeoFix;
+    geolocationAttempted?: boolean;
+    continuation?: boolean;
+  };
+
+  /**
+   * One request/response round for a turn.
+   *
+   * Runs at most twice. The server answers `location_request` when the turn
+   * needs to know where the user is — at which point the browser prompt goes up,
+   * tied to the question the user just asked — and the same turn is resent as a
+   * continuation carrying whatever came back. A refusal or a timeout is resent
+   * too, flagged as attempted, so the server asks the user to type a suburb
+   * instead of asking the browser again.
+   */
+  async function streamTurn(
+    text: string,
+    assistantId: string,
+    wasNewSession: boolean,
+    options: TurnOptions
+  ): Promise<void> {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: text,
+        sessionId: sessionId ?? undefined,
+        ...options,
+      }),
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    let needsLocation = false;
+
+    for await (const event of parseChatStream(response.body)) {
+      if (event.type === "start") {
+        if (sessionId === null) {
+          window.history.replaceState({}, "", `/chat/${event.sessionId}`);
+        }
+        setSessionId(event.sessionId);
+      } else if (event.type === "text") {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + event.text } : m))
+        );
+      } else if (event.type === "sources") {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, sources: event.sources } : m))
+        );
+      } else if (event.type === "location_request") {
+        needsLocation = true;
+      } else if (event.type === "done") {
+        if (needsLocation) break;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, status: "complete" } : m))
+        );
+        if (wasNewSession) router.refresh();
+      } else {
+        toast.error(event.message || "Something went wrong");
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, status: "error" } : m))
+        );
+      }
+    }
+
+    if (!needsLocation) return;
+
+    // Guard against a server that keeps asking: `continuation` is only ever set
+    // here, so a second location_request cannot start a third round.
+    if (options.continuation) return;
+
+    const fix = await geoFix.request();
+    await streamTurn(text, assistantId, wasNewSession, {
+      ...(fix ? { geo: fix } : {}),
+      geolocationAttempted: true,
+      continuation: true,
+    });
   }
 
   function handleSubmit(e: FormEvent) {
