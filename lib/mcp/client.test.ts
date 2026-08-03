@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const connect = vi.fn();
 const callTool = vi.fn();
@@ -140,5 +140,58 @@ describe("MCP client", () => {
     await expect(findVictoriaScreeningServicesViaMcp({ location: "Carlton" })).resolves.toEqual(
       VALID_DIRECTORY
     );
+  });
+
+  // Regression: production had NEXT_PUBLIC_APP_URL set to "". `??` treated the
+  // empty string as configured, so the base became "" and `new URL("/api/mcp")`
+  // threw out of the client, past the orchestrator, and killed the chat stream
+  // with "Invalid URL" instead of degrading to RAG.
+  describe("base URL resolution", () => {
+    const saved = {
+      mcp: process.env.MCP_BASE_URL,
+      app: process.env.NEXT_PUBLIC_APP_URL,
+    };
+
+    afterEach(() => {
+      process.env.MCP_BASE_URL = saved.mcp;
+      process.env.NEXT_PUBLIC_APP_URL = saved.app;
+    });
+
+    test("falls back to localhost when both vars are blank rather than throwing", async () => {
+      process.env.MCP_BASE_URL = "";
+      process.env.NEXT_PUBLIC_APP_URL = "";
+      callTool.mockResolvedValue({ structuredContent: VALID_DIRECTORY });
+
+      await expect(findVictoriaScreeningServicesViaMcp({ location: "Carlton" })).resolves.toEqual(
+        VALID_DIRECTORY
+      );
+      expect(StreamableHTTPClientTransport).toHaveBeenCalledWith(
+        new URL("http://localhost:3000/api/mcp"),
+        expect.anything()
+      );
+    });
+
+    test("prefers MCP_BASE_URL over NEXT_PUBLIC_APP_URL", async () => {
+      process.env.MCP_BASE_URL = "https://internal.example.com/";
+      process.env.NEXT_PUBLIC_APP_URL = "https://public.example.com";
+      callTool.mockResolvedValue({ structuredContent: VALID_DIRECTORY });
+
+      await findVictoriaScreeningServicesViaMcp({ location: "Carlton" });
+
+      expect(StreamableHTTPClientTransport).toHaveBeenCalledWith(
+        new URL("https://internal.example.com/api/mcp"),
+        expect.anything()
+      );
+    });
+
+    test("returns null instead of throwing when the base is not an absolute URL", async () => {
+      process.env.MCP_BASE_URL = "cervix-assistant.vercel.app";
+      process.env.NEXT_PUBLIC_APP_URL = "";
+
+      await expect(
+        findVictoriaScreeningServicesViaMcp({ location: "Carlton" })
+      ).resolves.toBeNull();
+      expect(StreamableHTTPClientTransport).not.toHaveBeenCalled();
+    });
   });
 });
