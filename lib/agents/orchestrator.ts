@@ -84,6 +84,7 @@ import { type EventsScope, detectEventsScope } from "@/lib/agents/events-scope";
 import {
   type GeoFix,
   type LocationResolution,
+  extractLocationPhrase,
   resolveLocation,
   resolveLocationPhrase,
 } from "@/lib/agents/location";
@@ -224,15 +225,30 @@ export type OrchestratorContext = {
  * still owns the connection.
  */
 /**
- * Looks like the user answering "where are you?" rather than starting a new
- * topic — "Burwood", "burwood vic", "Burwood 3125", "VIC", "3151".
+ * Read a reply to "where are you?" as a location, or return `null` when it is
+ * really a change of subject.
  *
- * The classifier can't see these as a request (no keywords), so the pending
- * action is what routes them; this only has to reject whole sentences. It must
- * admit a mixed name-and-number reply, which the earlier letters-only and
- * digits-only checks between them did not: "burwood 3125" matched neither.
+ * Two shapes, because people answer both ways. A bare "Burwood 3125" or "VIC" is
+ * the whole message, and is classified directly. But "I am in burwood east,
+ * 3151." is just as common a reply, and counting tokens cannot tell it from
+ * "actually, tell me about HPV instead" — both are six words. So the sentence
+ * form is settled by whether a location can be pulled out of it at all, which is
+ * a question about meaning rather than length.
  */
-function looksLikeLocationReply(text: string): boolean {
+function locationReplyResolution(message: string, geo: GeoFix | null): LocationResolution | null {
+  if (looksLikeBareReply(message)) {
+    const resolved = resolveLocationPhrase(message, geo);
+    // "unknown" here means the bare reply named nothing we recognise, so it is
+    // more likely a new topic than a location — let the classifier have it.
+    if (resolved.status !== "unknown" && resolved.status !== "missing") return resolved;
+  }
+
+  const phrase = extractLocationPhrase(message);
+  return phrase === null ? null : resolveLocationPhrase(phrase, geo);
+}
+
+/** A message that is nothing but a place: "Burwood", "burwood vic", "3151". */
+function looksLikeBareReply(text: string): boolean {
   const trimmed = text.trim();
   if (trimmed.length === 0 || trimmed.length > 60) return false;
   if (!/^[A-Za-z0-9][A-Za-z0-9\s,.'-]*$/.test(trimmed)) return false;
@@ -428,16 +444,17 @@ export async function* runOrchestrator(
   // thing that keeps the conversation on-path.
   const lastAssistant = [...ctx.history].reverse().find((m) => m.role === "assistant");
   const pending = lastAssistant ? pendingActionFor(lastAssistant) : null;
-  if (pending && looksLikeLocationReply(ctx.userMessage)) {
-    // The whole message is the location here, so it is classified directly
-    // rather than extracted from surrounding words.
-    const resolution = resolveLocationPhrase(ctx.userMessage, ctx.geo ?? null);
+  const replyLocation = pending ? locationReplyResolution(ctx.userMessage, ctx.geo ?? null) : null;
+  if (pending && replyLocation) {
     if (pending.kind === "find_events") {
       console.info("[orchestrator] dispatch: events_request (location follow-up)");
-      yield* dispatchEventsRequest(ctx, { resolution, scope: resumeScope(pending.scope) });
+      yield* dispatchEventsRequest(ctx, {
+        resolution: replyLocation,
+        scope: resumeScope(pending.scope),
+      });
     } else {
       console.info("[orchestrator] dispatch: services_request (location follow-up)");
-      yield* dispatchServicesRequest(ctx, resolution);
+      yield* dispatchServicesRequest(ctx, replyLocation);
     }
     return;
   }

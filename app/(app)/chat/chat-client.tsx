@@ -83,7 +83,7 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
 
     try {
-      await streamTurn(trimmed, assistantId, wasNewSession, {});
+      await streamTurn(trimmed, assistantId, wasNewSession, {}, sessionId);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Couldn't reach the chat service";
       toast.error(message);
@@ -110,19 +110,28 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
    * continuation carrying whatever came back. A refusal or a timeout is resent
    * too, flagged as attempted, so the server asks the user to type a suburb
    * instead of asking the browser again.
+   *
+   * `currentSessionId` is threaded through the recursion rather than read from
+   * the `sessionId` state. `setSessionId` does not update the closure this call
+   * is running in, so a resend that read the state would still send `undefined`
+   * for a session the first round had just created — and the server would make a
+   * second one. The turn's reply then landed in a session holding no user
+   * message, which is both an empty-looking conversation and, because the
+   * history starts with an assistant turn, a lost `pendingAction`.
    */
   async function streamTurn(
     text: string,
     assistantId: string,
     wasNewSession: boolean,
-    options: TurnOptions
+    options: TurnOptions,
+    currentSessionId: string | null
   ): Promise<void> {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: text,
-        sessionId: sessionId ?? undefined,
+        sessionId: currentSessionId ?? undefined,
         ...options,
       }),
     });
@@ -132,12 +141,14 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
     }
 
     let needsLocation = false;
+    let resolvedSessionId = currentSessionId;
 
     for await (const event of parseChatStream(response.body)) {
       if (event.type === "start") {
-        if (sessionId === null) {
+        if (currentSessionId === null) {
           window.history.replaceState({}, "", `/chat/${event.sessionId}`);
         }
+        resolvedSessionId = event.sessionId;
         setSessionId(event.sessionId);
       } else if (event.type === "text") {
         setMessages((prev) =>
@@ -170,11 +181,19 @@ export function ChatClient({ initialSessionId, initialMessages }: Props) {
     if (options.continuation) return;
 
     const fix = await geoFix.request();
-    await streamTurn(text, assistantId, wasNewSession, {
-      ...(fix ? { geo: fix } : {}),
-      geolocationAttempted: true,
-      continuation: true,
-    });
+    await streamTurn(
+      text,
+      assistantId,
+      wasNewSession,
+      {
+        ...(fix ? { geo: fix } : {}),
+        geolocationAttempted: true,
+        // Only meaningful once the first round has given us a session to
+        // continue in; without one the server has no user message to skip.
+        continuation: resolvedSessionId !== null,
+      },
+      resolvedSessionId
+    );
   }
 
   function handleSubmit(e: FormEvent) {

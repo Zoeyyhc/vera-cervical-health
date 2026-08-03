@@ -506,6 +506,74 @@ describe("events_request", () => {
     }
   );
 
+  test("resumes from a location named inside a sentence, not just a bare reply", async () => {
+    // Reported from manual testing: "I am in burwood east, 3151." is six words,
+    // and a token count cannot tell it from "actually, tell me about HPV
+    // instead". Counting words dropped it, so the turn fell to the classifier
+    // and answered a different question than the one being resumed.
+    classifyAs("general_chat");
+    vi.mocked(runVictoriaEventsAgent).mockResolvedValue({
+      context: "[1] Session",
+      sources: [{ id: "1", title: "Session", chunkId: "vic-events:e1" }],
+    });
+
+    await collect({
+      userMessage: "I am in burwood east, 3151.",
+      history: [
+        { role: "user", content: "any events near me?" },
+        {
+          role: "assistant",
+          content: EVENTS_NEEDS_LOCATION_FALLBACK,
+          pendingAction: { kind: "find_events", awaiting: "location", scope: "nearby" },
+        },
+      ],
+    });
+
+    expect(runVictoriaEventsAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ location: "3151" })
+    );
+  });
+
+  test("a change of subject after the location prompt is not read as a location", async () => {
+    classifyAs("general_chat");
+
+    await collect({
+      userMessage: "actually, tell me about HPV instead",
+      history: [
+        {
+          role: "assistant",
+          content: EVENTS_NEEDS_LOCATION_FALLBACK,
+          pendingAction: { kind: "find_events", awaiting: "location", scope: "nearby" },
+        },
+      ],
+    });
+
+    expect(runVictoriaEventsAgent).not.toHaveBeenCalled();
+    expect(runResponseAgent).toHaveBeenCalled();
+  });
+
+  test("an out-of-Victoria reply to the location prompt explains the scope", async () => {
+    // Reported from manual testing: this answered "your message may have been
+    // cut off" instead, because the pending action had been lost.
+    classifyAs("general_chat");
+
+    const chunks = await collect({
+      userMessage: "Bondi East",
+      history: [
+        { role: "user", content: "any events near me?" },
+        {
+          role: "assistant",
+          content: EVENTS_NEEDS_LOCATION_FALLBACK,
+          pendingAction: { kind: "find_events", awaiting: "location", scope: "nearby" },
+        },
+      ],
+    });
+
+    expect(chunks).toEqual([{ type: "text", text: EVENTS_OUTSIDE_VICTORIA_FALLBACK }]);
+    expect(runVictoriaEventsAgent).not.toHaveBeenCalled();
+    expect(runEventsAgent).not.toHaveBeenCalled();
+  });
+
   test("a resumed nearby request does not ask the browser again", async () => {
     classifyAs("general_chat");
 
