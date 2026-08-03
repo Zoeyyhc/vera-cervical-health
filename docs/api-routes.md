@@ -75,8 +75,12 @@ timeout; any failure resolves to `null` so the chat route degrades rather than e
 **Not browser-callable, by two independent guards** (`lib/mcp/auth.ts`):
 
 1. `MCP_AUTH_TOKEN` is a non-public env var, so it is never bundled into client JS.
-2. Any request carrying `Sec-Fetch-Mode` / `Sec-Fetch-Site` — headers a browser cannot suppress —
-   is rejected regardless of its token.
+2. Any request carrying `Sec-Fetch-Site`, `Sec-Fetch-Dest`, or `Origin` — headers a browser
+   attaches to every request and cannot suppress — is rejected regardless of its token.
+
+   Deliberately **not** `Sec-Fetch-Mode`: Node's own undici HTTP stack sends `Sec-Fetch-Mode: cors`,
+   so gating on it rejected 100% of our own agent-layer calls. `lib/mcp/auth.transport.test.ts`
+   pins these header facts against the real MCP transport.
 
 There is deliberately **no** session-cookie path: being signed in, even as an admin, grants nothing here.
 Every rejection returns the same opaque `401 {"error":"unauthorized"}`.
