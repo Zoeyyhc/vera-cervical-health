@@ -574,6 +574,77 @@ describe("events_request", () => {
     expect(runEventsAgent).not.toHaveBeenCalled();
   });
 
+  test.each([
+    ["Victoria", "burwood"],
+    ["VIC", "burwood"],
+    ["3125", "3125"],
+  ])("rejoins the reply %s with the suburb it asked about", async (reply, expected) => {
+    // Answering "which Burwood?" with "Victoria" answers *which one*, not
+    // "search the whole state". Losing the suburb here searched all of Victoria
+    // and reported nothing found, for a question that named a suburb twice.
+    classifyAs("general_chat");
+    vi.mocked(runVictoriaEventsAgent).mockResolvedValue({
+      context: "[1] Session",
+      sources: [{ id: "1", title: "Session", chunkId: "vic-events:e1" }],
+    });
+
+    await collect({
+      userMessage: reply,
+      history: [
+        { role: "user", content: "what events are happening near me?" },
+        { role: "user", content: "Burwood" },
+        {
+          role: "assistant",
+          content: "There's a Burwood in New South Wales and Victoria…",
+          pendingAction: {
+            kind: "find_events",
+            awaiting: "location",
+            scope: "nearby",
+            locality: "burwood",
+          },
+        },
+      ],
+    });
+
+    expect(runVictoriaEventsAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ location: expected })
+    );
+  });
+
+  test("rejoining an interstate answer puts the request out of scope", async () => {
+    classifyAs("general_chat");
+
+    const chunks = await collect({
+      userMessage: "NSW",
+      history: [
+        {
+          role: "assistant",
+          content: "There's a Burwood in New South Wales and Victoria…",
+          pendingAction: {
+            kind: "find_events",
+            awaiting: "location",
+            scope: "nearby",
+            locality: "burwood",
+          },
+        },
+      ],
+    });
+
+    expect(chunks).toEqual([{ type: "text", text: EVENTS_OUTSIDE_VICTORIA_FALLBACK }]);
+    expect(runVictoriaEventsAgent).not.toHaveBeenCalled();
+  });
+
+  test("names the suburb it is asking about in the pending action", async () => {
+    classifyAs("events_request");
+
+    const chunks = await collect({ userMessage: "any events in burwood", history: [] });
+
+    expect(chunks).toContainEqual({
+      type: "pending_action",
+      action: expect.objectContaining({ kind: "find_events", locality: "burwood" }),
+    });
+  });
+
   test("a resumed nearby request does not ask the browser again", async () => {
     classifyAs("general_chat");
 

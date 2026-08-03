@@ -18,6 +18,13 @@ export const pendingActionSchema = z.object({
   /** Events only: the scope to resume with once a location arrives. */
   scope: z.enum(["statewide", "nearby", "specified_location"]).optional(),
   /**
+   * The suburb whose state we asked about, when the block was an ambiguous
+   * name. Carried so a reply of "Victoria" rejoins it as "Burwood, Victoria"
+   * rather than being read as a request to search the whole state — the user is
+   * answering *which Burwood*, not widening the search.
+   */
+  locality: z.string().optional(),
+  /**
    * True when the client should offer a browser geolocation prompt before
    * falling back to asking the user to type a suburb.
    */

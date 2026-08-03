@@ -124,6 +124,19 @@ export type LocationInput = {
 };
 
 /**
+ * True when a phrase names a state and nothing narrower — "Victoria", "VIC",
+ * "NSW", "new south wales".
+ *
+ * Used to recognise a reply that is answering "which Burwood?" rather than
+ * naming a new place, so the suburb already under discussion can be rejoined to
+ * it instead of dropped.
+ */
+export function namesOnlyAState(phrase: string): boolean {
+  const normalized = normalizeLocation(phrase);
+  return STATEWIDE_PHRASES.has(normalized) || STATE_ALIASES.has(normalized);
+}
+
+/**
  * Classify an explicit location string — a bare follow-up reply ("burwood vic",
  * "3151"), or a phrase already pulled out of a message.
  *

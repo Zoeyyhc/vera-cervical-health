@@ -85,6 +85,7 @@ import {
   type GeoFix,
   type LocationResolution,
   extractLocationPhrase,
+  namesOnlyAState,
   resolveLocation,
   resolveLocationPhrase,
 } from "@/lib/agents/location";
@@ -235,8 +236,19 @@ export type OrchestratorContext = {
  * form is settled by whether a location can be pulled out of it at all, which is
  * a question about meaning rather than length.
  */
-function locationReplyResolution(message: string, geo: GeoFix | null): LocationResolution | null {
+function locationReplyResolution(
+  message: string,
+  geo: GeoFix | null,
+  awaitingLocality?: string
+): LocationResolution | null {
   if (looksLikeBareReply(message)) {
+    // "Victoria" in reply to "which Burwood?" answers *which one*; it is not a
+    // request to search the whole state. Rejoin it with the name we asked
+    // about, or the suburb is dropped and the search silently widens.
+    if (awaitingLocality && namesOnlyAState(message)) {
+      const rejoined = resolveLocationPhrase(`${awaitingLocality} ${message}`, geo);
+      if (rejoined.status !== "unknown" && rejoined.status !== "missing") return rejoined;
+    }
     const resolved = resolveLocationPhrase(message, geo);
     // "unknown" here means the bare reply named nothing we recognise, so it is
     // more likely a new topic than a location — let the classifier have it.
@@ -305,7 +317,10 @@ async function* dispatchServicesRequest(
       type: "text",
       text: ambiguousLocationFallback(resolution.locality, resolution.candidateStates, "services"),
     };
-    yield { type: "pending_action", action: awaitingLocation };
+    yield {
+      type: "pending_action",
+      action: { ...awaitingLocation, locality: resolution.locality },
+    };
     return;
   }
   if (resolution.status === "outside_vic") {
@@ -373,7 +388,7 @@ async function* dispatchEventsRequest(
         type: "text",
         text: ambiguousLocationFallback(resolution.locality, resolution.candidateStates, "events"),
       };
-      yield { type: "pending_action", action: pending() };
+      yield { type: "pending_action", action: { ...pending(), locality: resolution.locality } };
       return;
     }
     if (resolution.status === "outside_vic") {
@@ -444,7 +459,9 @@ export async function* runOrchestrator(
   // thing that keeps the conversation on-path.
   const lastAssistant = [...ctx.history].reverse().find((m) => m.role === "assistant");
   const pending = lastAssistant ? pendingActionFor(lastAssistant) : null;
-  const replyLocation = pending ? locationReplyResolution(ctx.userMessage, ctx.geo ?? null) : null;
+  const replyLocation = pending
+    ? locationReplyResolution(ctx.userMessage, ctx.geo ?? null, pending.locality)
+    : null;
   if (pending && replyLocation) {
     if (pending.kind === "find_events") {
       console.info("[orchestrator] dispatch: events_request (location follow-up)");
