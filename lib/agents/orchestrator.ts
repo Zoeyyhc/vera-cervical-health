@@ -257,17 +257,17 @@ export async function* runOrchestrator(
   supabase: SupabaseClient<Database>,
   ctx: OrchestratorContext
 ): AsyncIterable<AgentChunk> {
-  // City follow-up: the previous assistant turn left us inside the events path
-  // waiting on a location, and the user replied with something that looks like a
-  // bare city name. The classifier won't see this as events_request (no events
-  // keywords) and the events agent's regex won't extract a location from a bare
-  // word, so we bridge the state here and route directly with the typed string
-  // as city.
+  // Location follow-up: the previous assistant turn left us inside the events
+  // path waiting on a location, and the user replied with something that looks
+  // like a bare place — a city name or a postcode. The classifier won't see this
+  // as events_request (no events keywords) and the events agent's regex won't
+  // extract a location from a bare word, so we bridge the state here and route
+  // directly with the typed string as city.
   const lastAssistant = [...ctx.history].reverse().find((m) => m.role === "assistant");
   if (
     lastAssistant !== undefined &&
     EVENTS_LOCATION_CONTEXT.has(lastAssistant.content) &&
-    looksLikeBareCity(ctx.userMessage)
+    looksLikeBareLocation(ctx.userMessage)
   ) {
     console.info("[orchestrator] dispatch: events_request (city follow-up)");
     yield* dispatchEventsRequest(ctx, ctx.userMessage.trim());

@@ -585,6 +585,27 @@ describe("runOrchestrator", () => {
     expect(runResponseAgent).not.toHaveBeenCalled();
   });
 
+  test("city follow-up: a bare postcode reply bridges to events, same as a city name", async () => {
+    // A postcode is the more precise location signal, not a lesser one — the
+    // Victorian resolver treats it as decisive. Dropping it here sends the turn
+    // to general_chat, where the response agent has no events grounding at all.
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("general_chat") as never);
+    vi.mocked(runEventsAgent).mockResolvedValue({ eventsContext: "", eventsSources: [] });
+
+    const ctx: OrchestratorContext = {
+      userMessage: "3151",
+      history: [
+        { role: "user", content: "what events are happening near me?" },
+        { role: "assistant", content: EVENTS_EMPTY_FALLBACK },
+      ],
+    };
+    const chunks = await collectOrchestrator(ctx);
+
+    expect(runEventsAgent).toHaveBeenCalledWith({ userMessage: "3151", city: "3151" });
+    expect(chunks).toEqual([{ type: "text", text: EVENTS_EMPTY_FALLBACK }]);
+    expect(runResponseAgent).not.toHaveBeenCalled();
+  });
+
   test("city follow-up: does NOT fire when the last assistant turn was something else", async () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("general_chat") as never);
     vi.mocked(runResponseAgent).mockReturnValue(
