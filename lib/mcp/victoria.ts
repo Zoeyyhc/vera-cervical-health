@@ -35,6 +35,14 @@ const STATEWIDE_TOKENS: ReadonlySet<string> = new Set([
 const STATE_SUFFIXES: ReadonlyArray<string> = ["victoria", "vic", "australia", "au"];
 
 /**
+ * Compass suffixes that split a Victorian locality into named parts — Burwood /
+ * Burwood East, Bentleigh / Bentleigh East. Stripped only as a second pass, and
+ * only from the end: a leading compass word makes its own locality (North
+ * Melbourne is not Melbourne), and those are listed individually below.
+ */
+const COMPASS_SUFFIXES: ReadonlyArray<string> = ["north", "south", "east", "west"];
+
+/**
  * Victorian localities recognised by name. Not exhaustive — a postcode always
  * works, and this list grows through the source registry review as gaps appear.
  */
@@ -248,6 +256,19 @@ function isVictorianPostcode(value: string): boolean {
 }
 
 /**
+ * Drop one trailing compass word, or return `null` when there is nothing left to
+ * look up — a bare "east" is not a suburb whose name we happened to lose.
+ */
+function stripCompassSuffix(body: string): string | null {
+  for (const compass of COMPASS_SUFFIXES) {
+    if (body.endsWith(` ${compass}`)) {
+      return body.slice(0, -(compass.length + 1)).trim() || null;
+    }
+  }
+  return null;
+}
+
+/**
  * Resolve a free-text location to Victorian scope.
  *
  * Order matters: a postcode is decisive (in range or not), because "Sydney 3000"
@@ -292,6 +313,15 @@ export function resolveVictoriaScope(raw: string): VictoriaScope {
 
   // 4. Locality allowlist.
   if (KNOWN_LOCALITIES.has(body)) {
+    return { inVictoria: true, kind: "suburb", normalized };
+  }
+
+  // 5. Same list, minus one trailing compass word. This admits the whole
+  //    "<listed suburb> East/West/North/South" family without listing each part
+  //    by hand, and stays as tight as the allowlist itself: the base name must
+  //    still be listed, so "Bondi East" remains outside Victoria.
+  const withoutCompass = stripCompassSuffix(body);
+  if (withoutCompass && KNOWN_LOCALITIES.has(withoutCompass)) {
     return { inVictoria: true, kind: "suburb", normalized };
   }
 

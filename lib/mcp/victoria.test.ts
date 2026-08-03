@@ -52,6 +52,41 @@ describe("resolveVictoriaScope", () => {
     expect(resolveVictoriaScope("Kangaroo Ground").inVictoria).toBe(false);
   });
 
+  // Victoria names a whole class of suburbs "<listed suburb> <compass point>".
+  // Requiring each one in the allowlist means a real resident of Burwood East is
+  // told we don't cover their area — the worst failure this resolver can produce.
+  it.each([
+    "Burwood East",
+    "Brighton East",
+    "Bentleigh East",
+    "Doncaster East",
+    "Glen Waverley South",
+    "Preston West",
+    "Ringwood North",
+  ])("accepts %s, a compass-suffixed form of a listed locality", (input) => {
+    const scope = resolveVictoriaScope(input);
+    expect(scope.inVictoria).toBe(true);
+    if (scope.inVictoria) expect(scope.kind).toBe("suburb");
+  });
+
+  it.each(["North Melbourne", "East Melbourne", "South Melbourne", "Carlton North"])(
+    "still accepts %s, which is a listed locality in its own right",
+    (input) => {
+      expect(resolveVictoriaScope(input).inVictoria).toBe(true);
+    }
+  );
+
+  it.each(["Bondi East", "Sydney North", "Perth South", "Fremantle West"])(
+    "does not accept %s — the compass suffix must not rescue an unlisted base name",
+    (input) => {
+      expect(resolveVictoriaScope(input).inVictoria).toBe(false);
+    }
+  );
+
+  it.each(["east", "north", "south west"])("does not accept the bare compass word %s", (input) => {
+    expect(resolveVictoriaScope(input).inVictoria).toBe(false);
+  });
+
   it("lets a postcode override a misleading place name", () => {
     expect(resolveVictoriaScope("Sydney 3000").inVictoria).toBe(true);
     expect(resolveVictoriaScope("Melbourne 2000").inVictoria).toBe(false);

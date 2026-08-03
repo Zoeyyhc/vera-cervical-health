@@ -218,6 +218,7 @@ vi.mock("@/lib/ai/rag-gap", async (importOriginal) => {
 import { recordAbuseEvent } from "@/lib/ai/abuse";
 import { recordRagGap } from "@/lib/ai/rag-gap";
 import {
+  EVENTS_EMPTY_FALLBACK,
   EVENTS_NEEDS_LOCATION_FALLBACK,
   INJECTION_REFUSAL,
   type OrchestratorContext,
@@ -554,6 +555,34 @@ describe("runOrchestrator", () => {
       city: "melbourne",
     });
     expect(runResponseAgent).toHaveBeenCalledTimes(1);
+  });
+
+  test("city follow-up: a bare city reply after an empty-events answer retries events for that city", async () => {
+    // "Nothing in Burwood East" → "melbourne" is a retry, not a topic change.
+    // Without the bridge the classifier reads a bare city as general_chat and
+    // the response agent answers about events with no grounding at all.
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("general_chat") as never);
+    vi.mocked(runEventsAgent).mockResolvedValue({ eventsContext: "", eventsSources: [] });
+
+    const ctx: OrchestratorContext = {
+      userMessage: "melbourne",
+      history: [
+        { role: "user", content: "what events are happening near me?" },
+        { role: "assistant", content: EVENTS_NEEDS_LOCATION_FALLBACK },
+        { role: "user", content: "burwood east" },
+        { role: "assistant", content: EVENTS_EMPTY_FALLBACK },
+      ],
+    };
+    const chunks = await collectOrchestrator(ctx);
+
+    expect(runEventsAgent).toHaveBeenCalledWith({
+      userMessage: "melbourne",
+      city: "melbourne",
+    });
+    // Still empty for Melbourne — but the honest fallback, not an ungrounded
+    // improvisation from the response agent.
+    expect(chunks).toEqual([{ type: "text", text: EVENTS_EMPTY_FALLBACK }]);
+    expect(runResponseAgent).not.toHaveBeenCalled();
   });
 
   test("city follow-up: does NOT fire when the last assistant turn was something else", async () => {

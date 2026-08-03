@@ -155,6 +155,51 @@ describe("services_request", () => {
       expect.objectContaining({ city: "3053" })
     );
   });
+
+  test.each([
+    ["out-of-scope", SERVICES_OUTSIDE_VICTORIA_FALLBACK],
+    ["unreachable-MCP", SERVICES_EMPTY_FALLBACK],
+  ])("bridges a location reply after the %s answer", async (_label, previousAnswer) => {
+    // Naming another suburb after a dead end is a retry of the same request.
+    // The bridge has to survive every services fallback, not just the prompt.
+    classifyAs("general_chat");
+    vi.mocked(runVictoriaServicesAgent).mockResolvedValue({
+      context: "[1] healthdirect …",
+      sources: [VIC_SOURCE],
+    });
+
+    await collect({
+      userMessage: "burwood east",
+      history: [
+        { role: "user", content: "where can I get screened?" },
+        { role: "assistant", content: previousAnswer },
+      ],
+    });
+
+    expect(runVictoriaServicesAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ city: "burwood east" })
+    );
+    expect(runResponseAgent).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not bridge a location reply after an unrelated answer", async () => {
+    classifyAs("general_chat");
+    vi.mocked(runResponseAgent).mockReturnValue(
+      (async function* () {
+        yield { type: "text", text: "ok" } as AgentChunk;
+      })() as never
+    );
+
+    await collect({
+      userMessage: "burwood east",
+      history: [
+        { role: "user", content: "what is HPV?" },
+        { role: "assistant", content: "HPV is a common virus…" },
+      ],
+    });
+
+    expect(runVictoriaServicesAgent).not.toHaveBeenCalled();
+  });
 });
 
 describe("health_question", () => {

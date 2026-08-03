@@ -99,7 +99,7 @@ const NEWS_EMPTY_FALLBACK =
   "I couldn't find any recent health news right now. Try again in a bit, or ask me about cervical health topics directly.";
 export const EVENTS_NEEDS_LOCATION_FALLBACK =
   "Which city are you in? I can look up cervical health events near you.";
-const EVENTS_EMPTY_FALLBACK =
+export const EVENTS_EMPTY_FALLBACK =
   "I couldn't find any upcoming health events for that location right now. Try a nearby city, or check back later.";
 export const INJECTION_REFUSAL =
   "I can only help with cervical health education, and I can't follow instructions that change how I work. But I'm happy to answer questions about HPV, screening, vaccination, or related topics — what would you like to know?";
@@ -111,6 +111,24 @@ export const SERVICES_OUTSIDE_VICTORIA_FALLBACK =
   "My verified service directories only cover Victoria at the moment, so I can't look that area up reliably. You can still use the Clinics page to search for services near you, and Healthdirect's national service finder at healthdirect.gov.au covers the rest of Australia.";
 export const SERVICES_EMPTY_FALLBACK =
   "I couldn't reach my verified Victorian service directories just now. In the meantime, the Clinics page can search for services near you, and your GP can also do a cervical screening test.";
+
+/**
+ * Assistant turns that leave the conversation inside a path awaiting a location.
+ *
+ * Asking for one is the obvious case, but so is every dead end: after "nothing
+ * in Burwood East" or "that's outside Victoria", naming another suburb is a
+ * retry of the same request, not a new topic. These are the full fallback sets
+ * for each path, and they are disjoint, so a turn belongs to at most one.
+ */
+const EVENTS_LOCATION_CONTEXT: ReadonlySet<string> = new Set([
+  EVENTS_NEEDS_LOCATION_FALLBACK,
+  EVENTS_EMPTY_FALLBACK,
+]);
+const SERVICES_LOCATION_CONTEXT: ReadonlySet<string> = new Set([
+  SERVICES_NEEDS_LOCATION_FALLBACK,
+  SERVICES_OUTSIDE_VICTORIA_FALLBACK,
+  SERVICES_EMPTY_FALLBACK,
+]);
 
 export type OrchestratorContext = {
   /** The new user turn. Same shape as the response agent's ctx. */
@@ -239,14 +257,16 @@ export async function* runOrchestrator(
   supabase: SupabaseClient<Database>,
   ctx: OrchestratorContext
 ): AsyncIterable<AgentChunk> {
-  // City follow-up: the previous assistant turn was our "Which city?" prompt
-  // and the user replied with something that looks like a bare city name. The
-  // classifier won't see this as events_request (no events keywords) and the
-  // events agent's regex won't extract a location from a bare word, so we
-  // bridge the state here and route directly with the typed string as city.
+  // City follow-up: the previous assistant turn left us inside the events path
+  // waiting on a location, and the user replied with something that looks like a
+  // bare city name. The classifier won't see this as events_request (no events
+  // keywords) and the events agent's regex won't extract a location from a bare
+  // word, so we bridge the state here and route directly with the typed string
+  // as city.
   const lastAssistant = [...ctx.history].reverse().find((m) => m.role === "assistant");
   if (
-    lastAssistant?.content === EVENTS_NEEDS_LOCATION_FALLBACK &&
+    lastAssistant !== undefined &&
+    EVENTS_LOCATION_CONTEXT.has(lastAssistant.content) &&
     looksLikeBareCity(ctx.userMessage)
   ) {
     console.info("[orchestrator] dispatch: events_request (city follow-up)");
@@ -254,9 +274,10 @@ export async function* runOrchestrator(
     return;
   }
 
-  // Same bridge for the services prompt above.
+  // Same bridge for the services path above.
   if (
-    lastAssistant?.content === SERVICES_NEEDS_LOCATION_FALLBACK &&
+    lastAssistant !== undefined &&
+    SERVICES_LOCATION_CONTEXT.has(lastAssistant.content) &&
     looksLikeBareLocation(ctx.userMessage)
   ) {
     console.info("[orchestrator] dispatch: services_request (location follow-up)");
