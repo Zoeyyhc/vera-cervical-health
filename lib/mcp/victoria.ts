@@ -1,3 +1,5 @@
+import { VIC_LOCALITIES } from "@/lib/mcp/vic-localities.generated";
+
 /**
  * Victorian geographic scope resolution for the Trusted Health MCP.
  *
@@ -6,11 +8,20 @@
  * MCP returns a clear non-result outside Victoria; it does not silently fall
  * back to nationwide search."
  *
- * The resolver is deliberately an allowlist. An unrecognised place name resolves
- * to NOT-Victoria, so the failure mode is "we only cover Victoria" rather than
- * serving Victorian directory links to someone in Sydney. `KNOWN_LOCALITIES`
- * covers Melbourne metro plus the regional centres; postcodes cover the rest of
- * the state, and admins extend the list as real traffic shows what is missing.
+ * The resolver is an allowlist: an unrecognised place name resolves to
+ * NOT-Victoria, so the failure mode is "we only cover Victoria" rather than
+ * serving Victorian directory links to someone in Sydney. The list is the full
+ * state gazetteer (`vic-localities.generated.ts`) rather than a hand-maintained
+ * sample, because a hand-maintained sample produces the *other* failure: a
+ * resident of Vermont, twenty kilometres from the CBD, told that we do not cover
+ * their state.
+ *
+ * This function answers one narrow question — "could this string be in
+ * Victoria?" — and is the gate at the MCP boundary, where the location has
+ * already been disambiguated. It deliberately says nothing about whether a name
+ * is *unambiguously* Victorian: "Richmond" passes here and exists in four other
+ * states. That distinction belongs to the agent layer, before a tool is ever
+ * called; see `resolveLocation` in `lib/agents/location.ts`.
  */
 
 /** Victorian postcode ranges. 3xxx is the state; 8xxx is Melbourne PO-box space. */
@@ -36,195 +47,14 @@ const STATE_SUFFIXES: ReadonlyArray<string> = ["victoria", "vic", "australia", "
 
 /**
  * Compass suffixes that split a Victorian locality into named parts — Burwood /
- * Burwood East, Bentleigh / Bentleigh East. Stripped only as a second pass, and
- * only from the end: a leading compass word makes its own locality (North
- * Melbourne is not Melbourne), and those are listed individually below.
+ * Burwood East, Bentleigh / Bentleigh East. The gazetteer lists both halves, so
+ * this pass is now a spelling-variant net rather than a coverage mechanism: it
+ * catches forms the dataset writes differently ("Wandin North" vs "North
+ * Wandin"). Stripped only from the end, because a leading compass word makes its
+ * own locality — North Melbourne is not Melbourne — and the base name must still
+ * be in the gazetteer, so "Bondi East" stays outside Victoria.
  */
 const COMPASS_SUFFIXES: ReadonlyArray<string> = ["north", "south", "east", "west"];
-
-/**
- * Victorian localities recognised by name. Not exhaustive — a postcode always
- * works, and this list grows through the source registry review as gaps appear.
- */
-const KNOWN_LOCALITIES: ReadonlySet<string> = new Set([
-  // Melbourne CBD and inner
-  "melbourne",
-  "melbourne cbd",
-  "carlton",
-  "carlton north",
-  "fitzroy",
-  "collingwood",
-  "abbotsford",
-  "richmond",
-  "south yarra",
-  "prahran",
-  "windsor",
-  "st kilda",
-  "south melbourne",
-  "port melbourne",
-  "albert park",
-  "middle park",
-  "docklands",
-  "southbank",
-  "east melbourne",
-  "west melbourne",
-  "north melbourne",
-  "parkville",
-  "kensington",
-  "flemington",
-  "brunswick",
-  "brunswick east",
-  "brunswick west",
-  "coburg",
-  "preston",
-  "thornbury",
-  "northcote",
-  "clifton hill",
-  "hawthorn",
-  "kew",
-  "camberwell",
-  "balwyn",
-  "canterbury",
-  "surrey hills",
-  "box hill",
-  "burwood",
-  "glen iris",
-  "malvern",
-  "armadale",
-  "toorak",
-  "caulfield",
-  "elsternwick",
-  "brighton",
-  "bentleigh",
-  "carnegie",
-  "murrumbeena",
-  "oakleigh",
-  "clayton",
-  "mount waverley",
-  "glen waverley",
-  "chadstone",
-  "footscray",
-  "yarraville",
-  "seddon",
-  "williamstown",
-  "altona",
-  "sunshine",
-  "st albans",
-  "essendon",
-  "moonee ponds",
-  "ascot vale",
-  "pascoe vale",
-  "glenroy",
-  "broadmeadows",
-  "craigieburn",
-  "epping",
-  "reservoir",
-  "bundoora",
-  "heidelberg",
-  "ivanhoe",
-  "eltham",
-  "greensborough",
-  "doncaster",
-  "templestowe",
-  "ringwood",
-  "croydon",
-  "lilydale",
-  "bayswater",
-  "boronia",
-  "ferntree gully",
-  "dandenong",
-  "noble park",
-  "springvale",
-  "keysborough",
-  "cheltenham",
-  "mentone",
-  "mordialloc",
-  "chelsea",
-  "carrum",
-  "frankston",
-  "seaford",
-  "mornington",
-  "mount eliza",
-  "rosebud",
-  "sorrento",
-  "hastings",
-  "cranbourne",
-  "berwick",
-  "narre warren",
-  "pakenham",
-  "officer",
-  "werribee",
-  "point cook",
-  "hoppers crossing",
-  "tarneit",
-  "wyndham vale",
-  "melton",
-  "caroline springs",
-  "sunbury",
-  "gisborne",
-  // Regional Victoria
-  "geelong",
-  "north geelong",
-  "south geelong",
-  "belmont",
-  "ocean grove",
-  "torquay",
-  "queenscliff",
-  "ballarat",
-  "bendigo",
-  "castlemaine",
-  "kyneton",
-  "daylesford",
-  "shepparton",
-  "wodonga",
-  "wangaratta",
-  "benalla",
-  "seymour",
-  "echuca",
-  "swan hill",
-  "mildura",
-  "horsham",
-  "ararat",
-  "stawell",
-  "hamilton",
-  "portland",
-  "warrnambool",
-  "colac",
-  "camperdown",
-  "traralgon",
-  "morwell",
-  "moe",
-  "sale",
-  "bairnsdale",
-  "lakes entrance",
-  "orbost",
-  "warragul",
-  "drouin",
-  "leongatha",
-  "wonthaggi",
-  "korumburra",
-  "healesville",
-  "yarra glen",
-  "marysville",
-  "bright",
-  "myrtleford",
-  "mansfield",
-  "alexandra",
-  "kilmore",
-  "wallan",
-  "romsey",
-  "bacchus marsh",
-  "maryborough",
-  "st arnaud",
-  "kerang",
-  "cobram",
-  "yarrawonga",
-  "phillip island",
-  "cowes",
-  "inverloch",
-  "apollo bay",
-  "lorne",
-]);
 
 export type VictoriaScope =
   | {
@@ -311,17 +141,14 @@ export function resolveVictoriaScope(raw: string): VictoriaScope {
     return { inVictoria: true, kind: "suburb", normalized };
   }
 
-  // 4. Locality allowlist.
-  if (KNOWN_LOCALITIES.has(body)) {
+  // 4. The state gazetteer.
+  if (VIC_LOCALITIES.has(body)) {
     return { inVictoria: true, kind: "suburb", normalized };
   }
 
-  // 5. Same list, minus one trailing compass word. This admits the whole
-  //    "<listed suburb> East/West/North/South" family without listing each part
-  //    by hand, and stays as tight as the allowlist itself: the base name must
-  //    still be listed, so "Bondi East" remains outside Victoria.
+  // 5. Same gazetteer, minus one trailing compass word — see COMPASS_SUFFIXES.
   const withoutCompass = stripCompassSuffix(body);
-  if (withoutCompass && KNOWN_LOCALITIES.has(withoutCompass)) {
+  if (withoutCompass && VIC_LOCALITIES.has(withoutCompass)) {
     return { inVictoria: true, kind: "suburb", normalized };
   }
 

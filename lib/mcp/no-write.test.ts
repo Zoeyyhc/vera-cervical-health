@@ -27,6 +27,7 @@ const READ_PATH_FILES = [
   "events.ts",
   "sources.ts",
   "victoria.ts",
+  "vic-localities.generated.ts",
   "schemas.ts",
   "client.ts",
   "auth.ts",
@@ -87,6 +88,22 @@ describe("MCP read path", () => {
       expect(source, `${file} must not call fetch`).not.toMatch(/\bfetch\s*\(/);
       expect(source, `${file} must not import cheerio`).not.toContain("cheerio");
     }
+  });
+
+  it("the generated gazetteer is inert data, not code", () => {
+    // It is machine-written and 3300 lines long, so nobody will read a diff of
+    // it closely. Pin its shape instead: exported const Sets and a number, no
+    // imports, no functions, nothing that could run.
+    const source = read("vic-localities.generated.ts");
+    expect(source).not.toMatch(/\bimport\b|\brequire\s*\(|\bfunction\b|=>/);
+    const exports = (source.match(/^export const (\w+)/gm) ?? []).map((m) =>
+      m.replace("export const ", "")
+    );
+    expect(exports.sort()).toEqual([
+      "CROSS_STATE_LOCALITIES",
+      "MAX_LOCALITY_WORDS",
+      "VIC_LOCALITIES",
+    ]);
   });
 
   it("every lib/mcp module is covered by one of the lists above", () => {
