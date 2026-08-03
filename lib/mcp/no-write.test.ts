@@ -102,6 +102,7 @@ describe("MCP read path", () => {
     expect(exports.sort()).toEqual([
       "CROSS_STATE_LOCALITIES",
       "MAX_LOCALITY_WORDS",
+      "NON_VIC_LOCALITIES",
       "VIC_LOCALITIES",
     ]);
   });

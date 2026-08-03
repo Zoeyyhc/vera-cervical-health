@@ -136,6 +136,14 @@ function serializeSet(name: string, values: Iterable<string>, doc: string): stri
   return `${doc}\nexport const ${name}: ReadonlySet<string> = new Set([\n${body}\n]);\n`;
 }
 
+function serializeStateMap(name: string, entries: Map<string, Set<string>>, doc: string): string {
+  const body = Array.from(entries.entries())
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([k, v]) => `  [${JSON.stringify(k)}, ${JSON.stringify(Array.from(v).sort())}],`)
+    .join("\n");
+  return `${doc}\nexport const ${name}: ReadonlyMap<string, readonly string[]> = new Map([\n${body}\n]);\n`;
+}
+
 async function main() {
   const rows = parseCsv(await loadCsv()).filter(isDeliverableLocality);
   if (rows.length === 0) throw new Error("no deliverable rows parsed — dataset shape changed?");
@@ -155,11 +163,15 @@ async function main() {
   }
 
   const vicLocalities = new Set<string>();
-  const crossState = new Set<string>();
+  const crossState = new Map<string, Set<string>>();
+  const nonVicLocalities = new Set<string>();
   for (const [locality, states] of Array.from(statesByLocality.entries())) {
-    if (!states.has("VIC")) continue;
+    if (!states.has("VIC")) {
+      nonVicLocalities.add(locality);
+      continue;
+    }
     vicLocalities.add(locality);
-    if (states.size > 1) crossState.add(locality);
+    if (states.size > 1) crossState.set(locality, states);
   }
 
   const maxWords = Math.max(...Array.from(vicLocalities, (n) => n.split(" ").length));
@@ -183,17 +195,34 @@ ${serializeSet(
  * ${vicLocalities.size} entries.
  */`
 )}
-${serializeSet(
+${serializeStateMap(
   "CROSS_STATE_LOCALITIES",
   crossState,
   `/**
- * Victorian locality names that also name a locality in another state —
- * Richmond, Brighton, St Kilda, Preston. ${crossState.size} entries.
+ * Victorian locality names that also name a locality in another state, mapped to
+ * every state that has one — Richmond, Brighton, St Kilda, Preston.
+ * ${crossState.size} entries.
  *
  * Naming one of these is not evidence of being in Victoria, so the agent layer
  * requires corroboration (an explicit state, a postcode, or a geolocation fix)
  * before routing the turn to the Victorian MCP. Serving Victorian directory
  * links to someone in Richmond NSW is the failure spec §4 exists to prevent.
+ * The state list is carried so the clarifying question can name the candidates
+ * instead of asking a vague "which state?".
+ */`
+)}
+${serializeSet(
+  "NON_VIC_LOCALITIES",
+  nonVicLocalities,
+  `/**
+ * Australian locality names with no Victorian entry. ${nonVicLocalities.size} entries.
+ *
+ * Carried so the agent layer can tell "a real place we do not cover" from "not a
+ * place at all". Both resolve to no Victorian result, but they deserve different
+ * replies: naming Sydney should get the out-of-scope explanation, while "in the
+ * morning" should get the ordinary location question. Without this, an
+ * out-of-state user is asked for their suburb, answers with the same suburb, and
+ * loops.
  */`
 )}
 /**
@@ -205,8 +234,8 @@ export const MAX_LOCALITY_WORDS = ${maxWords};
 
   writeFileSync(OUTPUT_PATH, contents);
   process.stderr.write(
-    `wrote ${OUTPUT_PATH}: ${vicLocalities.size} localities, ` +
-      `${crossState.size} cross-state, max ${maxWords} words\n`
+    `wrote ${OUTPUT_PATH}: ${vicLocalities.size} VIC localities, ${crossState.size} cross-state, ` +
+      `${nonVicLocalities.size} non-VIC, max ${maxWords} words\n`
   );
 }
 
