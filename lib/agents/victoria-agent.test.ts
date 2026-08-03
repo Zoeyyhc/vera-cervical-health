@@ -77,6 +77,35 @@ describe("resolveTurnLocation", () => {
   test("returns null when there is no location at all", () => {
     expect(resolveTurnLocation({ userMessage: "where can I get screened" })).toBeNull();
   });
+
+  // Nobody capitalises suburb names while typing into a chat box. Requiring it
+  // sends a real Victorian user to the "which suburb are you in?" prompt for a
+  // message that already named their suburb.
+  test("extracts a lowercase Victorian suburb", () => {
+    expect(
+      resolveTurnLocation({ userMessage: "where can I get cervical screening in burwood east?" })
+    ).toBe("burwood east");
+  });
+
+  test("extracts a lowercase single-word Victorian locality", () => {
+    expect(resolveTurnLocation({ userMessage: "where can I get screened in geelong" })).toBe(
+      "geelong"
+    );
+  });
+
+  // The capital letter was doing real work: it marked a proper noun. Dropping it
+  // must not turn every word after a preposition into a place.
+  test.each([
+    "can I get screened in the morning",
+    "what happens in a screening test",
+    "any events near me",
+  ])("does not mistake %s for a location", (userMessage) => {
+    expect(resolveTurnLocation({ userMessage })).toBeNull();
+  });
+
+  test("still returns a capitalised non-Victorian place, so the scope reply stays specific", () => {
+    expect(resolveTurnLocation({ userMessage: "clinics in Sydney" })).toBe("Sydney");
+  });
 });
 
 describe("isVictorianTurn", () => {

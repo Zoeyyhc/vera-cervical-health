@@ -24,6 +24,12 @@ import type { Source } from "@/types/agents";
 const LOCATION_HINT_RE =
   /\b(?:in|near|around|at|from)\s+([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*|\d{4})/;
 
+/** Same markers, but keeping whatever follows so it can be tested word by word. */
+const LOCATION_TAIL_RE = /\b(?:in|near|around|at|from)\s+(.+)/i;
+
+/** Longest Victorian locality worth trying, in words ("glen waverley south"). */
+const MAX_LOCALITY_WORDS = 3;
+
 export type VictoriaAgentContext = {
   /** The new user turn. Used as the search query and for location extraction. */
   userMessage: string;
@@ -57,7 +63,33 @@ export function resolveTurnLocation(ctx: VictoriaAgentContext): string | null {
   const fromCity = ctx.city?.trim();
   if (fromCity) return fromCity;
   const match = ctx.userMessage.match(LOCATION_HINT_RE);
-  return match ? match[1].trim() : null;
+  if (match) return match[1].trim();
+  return extractVictorianPhrase(ctx.userMessage);
+}
+
+/**
+ * Second pass for the way people actually type: "screening in burwood east",
+ * no capitals. A lowercase word carries none of the proper-noun signal the
+ * capitalised pattern relies on, so "in the morning" would read as a place. The
+ * allowlist supplies the missing signal — a lowercase candidate is only taken
+ * when it resolves to a Victorian locality or postcode.
+ *
+ * Longest window first, so "burwood east" wins over the "burwood" inside it.
+ */
+function extractVictorianPhrase(userMessage: string): string | null {
+  const tail = userMessage.match(LOCATION_TAIL_RE);
+  if (!tail) return null;
+
+  // Word-only tokens: "burwood east?" must not carry its question mark into the
+  // lookup, and normalizeLocation would strip it a step too late.
+  const words = tail[1].toLowerCase().match(/[a-z0-9]+/g);
+  if (!words) return null;
+
+  for (let n = Math.min(MAX_LOCALITY_WORDS, words.length); n >= 1; n--) {
+    const candidate = words.slice(0, n).join(" ");
+    if (resolveVictoriaScope(candidate).inVictoria) return candidate;
+  }
+  return null;
 }
 
 /** True when this turn is scoped to Victoria and the MCP may be consulted. */
