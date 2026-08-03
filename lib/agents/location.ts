@@ -270,15 +270,32 @@ export function extractLocationPhrase(userMessage: string): string | null {
   // Longest window first, so "burwood east" wins over the "burwood" inside it,
   // and so "research vic" is seen before the bare "research" inside it.
   for (let n = Math.min(MAX_LOCALITY_WORDS + 1, words.length); n >= 1; n--) {
-    const candidate = words.slice(0, n).join(" ");
+    const window = words.slice(0, n);
+    const candidate = window.join(" ");
     // An explicit state is corroboration enough on its own; it is what lets a
     // common-word suburb through, and what admits suburbs too new or too small
     // for the gazetteer.
     if (splitTrailingState(candidate).state !== null) return candidate;
+    // So is a postcode beside the name — and it has to be carried out whole.
+    // Returning just "burwood" from "in burwood 3125" drops the one thing that
+    // told us which Burwood, and asks the user a question they just answered.
+    if (carriesPostcode(window)) return candidate;
     if (COMMON_WORD_LOCALITIES.has(candidate)) continue;
     if (isKnownLocality(candidate)) return candidate;
   }
   return null;
+}
+
+/**
+ * True when this window is a postcode, or a known place name beside one.
+ *
+ * The name still has to check out, so an ordinary number in a sentence — "open
+ * at 2pm 2026" — is not mistaken for an address.
+ */
+function carriesPostcode(window: string[]): boolean {
+  if (!window.some((w) => /^\d{4}$/.test(w))) return false;
+  const name = window.filter((w) => !/^\d{4}$/.test(w)).join(" ");
+  return name.length === 0 || isKnownLocality(name);
 }
 
 function isKnownLocality(candidate: string): boolean {

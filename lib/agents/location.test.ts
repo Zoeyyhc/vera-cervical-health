@@ -183,6 +183,32 @@ describe("resolveLocation", () => {
     if (result.status === "confirmed_vic") expect(result.locality).toBe("burwood east");
   });
 
+  it("keeps a postcode that disambiguates the suburb next to it", () => {
+    // "burwood" alone is shared with NSW. Extracting only the name and dropping
+    // the postcode the user supplied means asking them which state they meant
+    // immediately after they answered that question.
+    const result = resolveLocation({ userMessage: "where can i get screening in burwood 3125?" });
+    expect(result.status).toBe("confirmed_vic");
+    if (result.status === "confirmed_vic") {
+      expect(result.postcode).toBe("3125");
+      expect(result.evidence).toBe("postcode");
+    }
+  });
+
+  it("keeps a state that disambiguates the suburb next to it", () => {
+    const result = resolveLocation({ userMessage: "where can i get screening in burwood vic?" });
+    expect(result.status).toBe("confirmed_vic");
+    if (result.status === "confirmed_vic") expect(result.evidence).toBe("explicit_state");
+  });
+
+  it("does not read a bare four-digit number as a postcode mid-sentence", () => {
+    // The corroboration rule must not turn any number into a location: the
+    // words beside it still have to name somewhere.
+    expect(resolveLocation({ userMessage: "is the clinic open at 2pm 2026" }).status).toBe(
+      "missing"
+    );
+  });
+
   describe("phrases that are not places", () => {
     it.each([
       "can I book a test in the morning",
