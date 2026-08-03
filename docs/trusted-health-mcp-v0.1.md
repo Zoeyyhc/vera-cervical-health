@@ -66,6 +66,58 @@ suburb or postcode, or when the request is for Victoria-wide information. The
 MCP returns a clear non-result outside Victoria; it does not silently fall back
 to nationwide search.
 
+**A location must be confirmed, not guessed.** Only four things confirm one:
+
+| Evidence | Example |
+|---|---|
+| An explicit state | "Burwood VIC", "Geelong, Victoria" |
+| A postcode | "3125", "burwood 3125" |
+| A geolocation fix carrying a state | `{ suburb: "Burwood", state: "VIC", postcode: "3125" }` |
+| A name unique to Victoria in the gazetteer | "Vermont South", "Hoppers Crossing" |
+
+A model may propose a candidate location; it may never confirm one. Free-text
+inference is not evidence of geography.
+
+**Shared names are asked about, never assumed.** 457 of Victoria's 3,317
+locality names are also used by another state — Richmond exists in five. Naming
+one without corroboration returns an *ambiguous* result, which asks the user for
+a state or postcode and calls no tool. A suburb name with no state attached —
+including one from a geolocation fix — corroborates nothing.
+
+**What the user typed outranks the browser.** "Burwood NSW" from a device in
+Melbourne is someone asking on behalf of family interstate.
+
+**The four ways of having no location are distinct**, because each needs a
+different answer:
+
+| Resolution | Response |
+|---|---|
+| `confirmed_vic` | Query the MCP |
+| `ambiguous` | Name the candidate states, ask which |
+| `outside_vic` | Explain the Victorian scope; offer national alternatives |
+| `missing` / `unknown` | Ask for a suburb and state, or a postcode |
+
+Collapsing these into "no result" is what produced "I couldn't find any upcoming
+health events for that location" for users the search had never covered.
+
+### Gazetteer
+
+Victorian scope resolves against the full state gazetteer, generated into
+`lib/mcp/vic-localities.generated.ts` and checked in. It is never fetched at
+runtime.
+
+Source: the [matthewproctor/australianpostcodes](https://github.com/matthewproctor/australianpostcodes)
+community compilation, pinned by commit SHA in
+`scripts/generate-vic-localities.ts` and regenerated with `pnpm vic:localities`.
+
+Only three factual columns are used — locality name, state, postcode — and none
+of the compilation's enriched geography. That repository publishes no LICENSE
+file; its README states the author considers the data "arguably public domain".
+This is place-name reference data, not provider records, so the constraint
+against copying third-party clinic or provider data does not apply to it. If a
+formally licensed source is later required, the ABS ASGS Suburbs and Localities
+release is CC BY 4.0, though it carries no postcodes.
+
 ### Initial approved source classes
 
 | Class | Initial sources | Permitted use |

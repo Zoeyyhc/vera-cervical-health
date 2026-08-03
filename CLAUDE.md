@@ -43,6 +43,9 @@ pnpm exec playwright test         # Run all E2E tests (Chromium + Firefox + WebK
 pnpm exec playwright test --ui    # Run with interactive Playwright UI
 pnpm exec playwright test <file>  # Run a single test file
 
+# Generated data
+pnpm vic:localities               # Rebuild lib/mcp/vic-localities.generated.ts (Victorian gazetteer)
+
 # Database
 supabase migration new <name>     # Create a new SQL migration file
 supabase db push                  # Apply pending migrations to local Supabase

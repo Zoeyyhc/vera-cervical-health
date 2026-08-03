@@ -86,11 +86,19 @@ User message
 - Returns up to 5 upcoming events (name, date, location, URL)
 - Falls back gracefully if no events found
 
+**Location resolution** (`lib/agents/location.ts`)
+- Runs *before* dispatch and decides whether the turn has a usable location:
+  `confirmed_vic` / `ambiguous` / `outside_vic` / `missing` / `unknown`
+- Only an explicit state, a postcode, a state-bearing geolocation fix, or a name unique to
+  Victoria confirms one. A suburb name shared with another state — 457 of them are — is asked
+  about, never guessed
+- What the user typed outranks the browser fix
+- See `docs/trusted-health-mcp.md` for the layering and the events scope rules
+
 **Victoria Agent** (`lib/agents/victoria-agent.ts`)
 - The orchestrator's adapter over the private Victoria Trusted Health MCP — see
   `docs/trusted-health-mcp-v0.1.md` (spec) and `docs/trusted-health-mcp.md` (how it is built)
-- Resolves the turn's location (geolocated `city` first, then a place mentioned in the message)
-  and only consults the MCP when that location is Victorian
+- Receives a location the orchestrator has already confirmed; it resolves none itself
 - Wraps the three read-only tools into the same `{ context, sources }` envelope the other agents return
 - **Never assumes availability:** every entry point resolves to an empty result when the MCP is
   unreachable, and the orchestrator falls back to the ordinary RAG / events path
