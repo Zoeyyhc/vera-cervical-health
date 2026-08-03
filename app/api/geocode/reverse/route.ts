@@ -19,6 +19,7 @@ type GeocodeResult = {
 
 type GeocodeResponse = {
   status?: string;
+  error_message?: string;
   results?: GeocodeResult[];
 };
 
@@ -77,6 +78,17 @@ export async function POST(request: Request) {
     data = (await upstream.json()) as GeocodeResponse;
   } catch {
     return Response.json(EMPTY_FIX);
+  }
+
+  // Google answers a rejected key with HTTP 200 and a status in the body, so a
+  // disabled Geocoding API, an expired key, or an exhausted quota all arrive
+  // here looking exactly like "we couldn't place you". Log the ones that are
+  // ours to fix — silence here cost an afternoon of chasing a permission prompt
+  // that was working the whole time.
+  if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+    console.error(
+      `[geocode/reverse] Google returned ${data.status}: ${data.error_message ?? "no detail"}`
+    );
   }
 
   if (data.status !== "OK" || !Array.isArray(data.results) || data.results.length === 0) {

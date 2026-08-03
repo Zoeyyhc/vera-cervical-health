@@ -154,6 +154,40 @@ describe("POST /api/geocode/reverse", () => {
     expect(await res.json()).toEqual({ suburb: null, state: null, postcode: null });
   });
 
+  test("logs a rejected key rather than passing it off as an empty fix", async () => {
+    // Google answers REQUEST_DENIED with HTTP 200, so a disabled Geocoding API
+    // is indistinguishable from "we couldn't place you" unless it is logged.
+    // This is exactly how a working geolocation flow looked broken.
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    server.use(
+      http.get(GEOCODE_URL, () =>
+        HttpResponse.json({
+          status: "REQUEST_DENIED",
+          error_message: "This API is not activated on your API project.",
+        })
+      )
+    );
+
+    const res = await POST(makeRequest({ lat: -37.85, lng: 145.11 }));
+
+    expect(await res.json()).toEqual({ suburb: null, state: null, postcode: null });
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("REQUEST_DENIED"));
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("not activated"));
+    spy.mockRestore();
+  });
+
+  test("stays quiet when the coordinates simply match nothing", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    server.use(
+      http.get(GEOCODE_URL, () => HttpResponse.json({ status: "ZERO_RESULTS", results: [] }))
+    );
+
+    await POST(makeRequest({ lat: 0, lng: 0 }));
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
   test("returns 401 when no user", async () => {
     vi.mocked(createClient).mockReturnValue(mockSupabase(null) as never);
     const res = await POST(makeRequest({ lat: 1, lng: 1 }));

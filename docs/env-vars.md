@@ -38,7 +38,17 @@ Used exclusively for generating `text-embedding-3-small` vectors in the RAG pipe
 |---|---|---|---|
 | `NEXT_PUBLIC_GOOGLE_MAPS_KEY` | Yes | local, preview, production | https://console.cloud.google.com → APIs & Services → Credentials |
 
-Used by the `/clinics` page to render the Google Map (client-side) and by `/api/clinics/search` for the Places API (New) call (server-side). Enable both **Maps JavaScript API** and **Places API (New)** in Google Cloud Console (these are separate entries — do not enable the legacy "Places API").
+Used by the `/clinics` page to render the Google Map (client-side), by `/api/clinics/search` for the Places API (New) call, and by `/api/geocode/reverse` to turn a browser position into a suburb/state/postcode for the chat.
+
+Enable **three separate entries** in Google Cloud Console:
+
+| API | Used by |
+|---|---|
+| Maps JavaScript API | `/clinics` map rendering |
+| Places API (New) | `/api/clinics/search` — *not* the legacy "Places API" |
+| **Geocoding API** | `/api/geocode/reverse` — the chat's "near me" location |
+
+Missing the Geocoding API fails quietly: Google answers `REQUEST_DENIED` with **HTTP 200**, so the route returns an empty fix and the chat asks the user to type a suburb — which looks like a broken geolocation prompt rather than a disabled API. The route logs the returned status, so check the server output if "near me" never resolves a location.
 
 ## Resend (Email)
 
