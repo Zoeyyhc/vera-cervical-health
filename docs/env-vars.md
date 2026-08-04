@@ -86,8 +86,18 @@ It is **not** `NEXT_PUBLIC_`, and must never become so — that non-public statu
 guards keeping the endpoint unreachable from a browser (`lib/mcp/auth.ts`). The only caller is
 Vera's own server-side agent layer.
 
-`MCP_BASE_URL` overrides the origin the server-side MCP client dials. The default is correct for
-local dev and Vercel; set it only if the app is served behind a different internal origin.
+`MCP_BASE_URL` overrides the origin the server-side MCP client dials. It defaults to
+`NEXT_PUBLIC_APP_URL`, which is correct on Vercel.
+
+**Locally it is only correct while the app is on the port `NEXT_PUBLIC_APP_URL` names.** Running
+`pnpm dev -p 3100` while `NEXT_PUBLIC_APP_URL` still says `:3000` leaves the MCP client dialling a
+port the app is not on — every tool call fails and the chat answers with its
+"couldn't reach my verified directories" fallback, which reads as a broken MCP rather than a wrong
+port. Override it alongside the flag:
+
+```bash
+MCP_BASE_URL=http://localhost:3100 pnpm dev -p 3100
+```
 
 ## App
 

@@ -81,7 +81,12 @@ cervix-assistant/
 │   │   ├── rag-agent.ts
 │   │   ├── news-agent.ts
 │   │   ├── events-agent.ts
+│   │   ├── victoria-agent.ts  # adapter over the Trusted Health MCP
+│   │   ├── location.ts        # confirms a location before any tool is called
+│   │   ├── events-scope.ts    # statewide vs nearby vs a named place
 │   │   └── response-agent.ts
+│   ├── mcp/             # Victoria Trusted Health MCP (private, read-only)
+│   │   └── vic-localities.generated.ts   # GENERATED — pnpm vic:localities
 │   ├── tools/           # Claude tool definitions (one file per tool)
 │   │   ├── health-kb.ts # retrieveHealthContext — pgvector similarity search
 │   │   ├── news.ts      # fetchHealthNews — NewsAPI
@@ -269,10 +274,8 @@ Required external accounts for full local dev: Supabase, Anthropic, OpenAI, Goog
 | `docs/api-routes.md` | All API routes with auth requirements |
 | `docs/env-vars.md` | All environment variables with provider links |
 | `docs/design-tokens.md` | Colors, typography, spacing, component rules |
+| `docs/abuse-prevention.md` | Injection classification, abuse_events, refusal copy |
+| `docs/editor-setup.md` | Biome editor integration |
 | `docs/sprints.md` | Sprint plan, MoSCoW priorities, open questions |
 | `DESIGN.md` | Full design system (Lovable-inspired) |
-| `tech-spec-overview.md` | Project overview and repo structure |
 | `tech-spec-ai-agents.md` | Multi-agent spec (detailed) |
-| `tech-spec-database.md` | Database schema and RAG pipeline spec |
-| `tech-spec-app.md` | Auth, API routes, dev workflow, testing |
-| `epic.md` | All 9 feature epics with MoSCoW prioritization |
