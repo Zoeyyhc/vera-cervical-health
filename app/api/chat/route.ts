@@ -1,6 +1,7 @@
 import { runOrchestrator } from "@/lib/agents/orchestrator";
 import { auditContext } from "@/lib/ai/audit-context";
 import { loadRecentMessages } from "@/lib/ai/context-window";
+import type { PendingAction } from "@/lib/ai/pending-action";
 import { type ChatStreamEvent, encodeChatStreamEvent } from "@/lib/ai/streaming";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -57,25 +58,31 @@ export async function POST(request: Request) {
     return Response.json({ error: "history_load_failed" }, { status: 500 });
   }
 
-  // 4a. City for the events agent comes from the chat client (browser
-  //     geolocation → /api/geocode/reverse). Optional; events agent falls
-  //     back to asking for a city when absent.
-  const city = parsed.data.city ?? null;
+  // 4a. Position for the location-scoped paths comes from the chat client
+  //     (browser geolocation → /api/geocode/reverse). Optional throughout.
+  const geo = parsed.data.geo ?? null;
 
   // 5. Persist the user message BEFORE calling Claude — durability over speed.
   //    The chat_sessions.updated_at trigger from #24 fires here so the
   //    sidebar reflects activity even if Claude fails.
-  const { error: userMsgErr } = await supabase.from("chat_messages").insert({
-    session_id: sessionId,
-    role: "user",
-    content: parsed.data.message,
-  });
-  if (userMsgErr) {
-    console.error(
-      "[/api/chat] user message insert failed:",
-      userMsgErr instanceof Error ? userMsgErr.message : userMsgErr
-    );
-    return Response.json({ error: "session_not_found" }, { status: 404 });
+  //
+  //    Skipped on a continuation: the client is resending a turn we asked it to
+  //    complete with a location, and the message row already exists from the
+  //    first attempt. Writing it again would duplicate it in the transcript and
+  //    in the history sent to Claude.
+  if (!parsed.data.continuation) {
+    const { error: userMsgErr } = await supabase.from("chat_messages").insert({
+      session_id: sessionId,
+      role: "user",
+      content: parsed.data.message,
+    });
+    if (userMsgErr) {
+      console.error(
+        "[/api/chat] user message insert failed:",
+        userMsgErr instanceof Error ? userMsgErr.message : userMsgErr
+      );
+      return Response.json({ error: "session_not_found" }, { status: 404 });
+    }
   }
 
   // 6. Open the response-agent stream + return ReadableStream of NDJSON
@@ -97,11 +104,13 @@ export async function POST(request: Request) {
 
           let assistantText = "";
           let collectedSources: import("@/types/agents").Source[] | null = null;
+          let pendingAction: PendingAction | null = null;
           try {
             for await (const chunk of runOrchestrator(supabase, {
               userMessage,
               history,
-              city,
+              geo,
+              geolocationAttempted: parsed.data.geolocationAttempted,
             })) {
               if (chunk.type === "text") {
                 assistantText += chunk.text;
@@ -109,16 +118,32 @@ export async function POST(request: Request) {
               } else if (chunk.type === "sources") {
                 collectedSources = chunk.sources;
                 send({ type: "sources", sources: chunk.sources });
+              } else if (chunk.type === "pending_action") {
+                pendingAction = chunk.action;
               }
             }
 
+            // The turn asked the browser for a position rather than answering.
+            // Nothing was said, so nothing is persisted: the client resolves a
+            // location and resends this same turn as a continuation.
+            if (pendingAction?.geolocation && assistantText.length === 0) {
+              send({ type: "location_request" });
+              send({ type: "done" });
+              return;
+            }
+
             // Persist the completed assistant message before signalling done.
+            // `pendingAction` rides along on the message that asked for it, so
+            // the next turn can resume the request instead of guessing from the
+            // wording of the reply.
             const { error: insertErr } = await supabase.from("chat_messages").insert({
               session_id: sessionIdResolved,
               role: "assistant",
               content: assistantText,
               // biome-ignore lint/suspicious/noExplicitAny: jsonb column type erases shape; cast is intentional
               sources: collectedSources as any,
+              // biome-ignore lint/suspicious/noExplicitAny: jsonb column type erases shape; cast is intentional
+              metadata: (pendingAction ? { pendingAction } : null) as any,
             });
             if (insertErr) {
               // Same policy as the non-streaming version: log but still emit done,

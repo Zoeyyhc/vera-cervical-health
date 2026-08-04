@@ -35,9 +35,17 @@ id          uuid primary key default gen_random_uuid()
 session_id  uuid references chat_sessions(id) on delete cascade
 role        text check (role in ('user', 'assistant'))
 content     text
-metadata    jsonb          -- agent trace, sources used, tool calls
+sources     jsonb          -- citation chips rendered with the message
+metadata    jsonb          -- conversation state carried on the turn
 created_at  timestamptz default now()
 ```
+
+**`metadata` holds `{ pendingAction }`** on an assistant turn that asked for
+something and is waiting for it — currently only a location, for the events and
+services paths. The orchestrator reads it off the previous turn so a reply of
+"3151" resumes the request it belongs to, instead of that retry depending on the
+exact wording of the question. Shape and parsing live in `lib/ai/pending-action.ts`;
+anything unparseable is treated as "no pending action" rather than failing the turn.
 
 **Indexes:** `(session_id)` for owner/session-scoped filtering; `(session_id, created_at)` for ordered-history reads (used by the chat context-window helper in EPIC3-05).
 

@@ -15,7 +15,8 @@
     "test:coverage": "vitest run --coverage",
     "seed:kb": "tsx --env-file=.env.local scripts/seed-knowledge-base.ts",
     "rag:query": "tsx --env-file=.env.local scripts/rag-query.ts",
-    "admin:create": "tsx --env-file=.env.local scripts/create-admin.ts"
+    "admin:create": "tsx --env-file=.env.local scripts/create-admin.ts",
+    "vic:localities": "tsx scripts/generate-vic-localities.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.91.1",

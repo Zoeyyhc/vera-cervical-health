@@ -80,17 +80,26 @@ function fallbackIntent(message: string): Intent {
 }
 
 import { runEventsAgent } from "@/lib/agents/events-agent";
+import { type EventsScope, detectEventsScope } from "@/lib/agents/events-scope";
+import {
+  type GeoFix,
+  type LocationResolution,
+  extractLocationPhrase,
+  namesOnlyAState,
+  resolveLocation,
+  resolveLocationPhrase,
+} from "@/lib/agents/location";
 import { runNewsAgent } from "@/lib/agents/news-agent";
 import { runRagAgent } from "@/lib/agents/rag-agent";
 import { type AgentChunk, runResponseAgent } from "@/lib/agents/response-agent";
 import {
-  isVictorianTurn,
   runVictoriaEventsAgent,
   runVictoriaHealthAgent,
   runVictoriaServicesAgent,
 } from "@/lib/agents/victoria-agent";
 import { recordAbuseEvent } from "@/lib/ai/abuse";
 import type { ChatHistoryMessage } from "@/lib/ai/context-window";
+import type { PendingAction } from "@/lib/ai/pending-action";
 import { GAP_THRESHOLD, recordRagGap } from "@/lib/ai/rag-gap";
 import type { Database } from "@/types/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -98,9 +107,20 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const NEWS_EMPTY_FALLBACK =
   "I couldn't find any recent health news right now. Try again in a bit, or ask me about cervical health topics directly.";
 export const EVENTS_NEEDS_LOCATION_FALLBACK =
-  "Which city are you in? I can look up cervical health events near you.";
-const EVENTS_EMPTY_FALLBACK =
-  "I couldn't find any upcoming health events for that location right now. Try a nearby city, or check back later.";
+  "Which suburb and state are you in — or what's your postcode? I can look up cervical health events near you once I know where to search.";
+export const EVENTS_EMPTY_FALLBACK =
+  "I couldn't find any upcoming health events for that location right now. Try a nearby suburb, or check back later.";
+/**
+ * Spec §7, matching the services path: an out-of-Victoria request gets the scope
+ * explained, not a bare empty result. Saying "I couldn't find any events" to a
+ * Sydney user describes a search that was never run for them.
+ *
+ * Deliberately claims nothing about what any organisation currently has on. The
+ * verified events table holds only hand-reviewed Victorian entries, so the
+ * honest offer elsewhere is national services and information, not listings.
+ */
+export const EVENTS_OUTSIDE_VICTORIA_FALLBACK =
+  "The events I can vouch for are reviewed by hand and only cover Victoria at the moment, so I can't tell you what's on in your area. For the rest of Australia, Healthdirect's national service finder at healthdirect.gov.au lists health services near you, Cancer Council's 13 11 20 line can point you to what's running in your state, and Jean Hailes at jeanhailes.org.au publishes cervical health information nationally. Your GP can also do a cervical screening test.";
 export const INJECTION_REFUSAL =
   "I can only help with cervical health education, and I can't follow instructions that change how I work. But I'm happy to answer questions about HPV, screening, vaccination, or related topics — what would you like to know?";
 export const SERVICES_NEEDS_LOCATION_FALLBACK =
@@ -112,17 +132,81 @@ export const SERVICES_OUTSIDE_VICTORIA_FALLBACK =
 export const SERVICES_EMPTY_FALLBACK =
   "I couldn't reach my verified Victorian service directories just now. In the meantime, the Clinics page can search for services near you, and your GP can also do a cervical screening test.";
 
+/** Full state names, so a clarifying question can read like a sentence. */
+const STATE_NAMES: ReadonlyMap<string, string> = new Map([
+  ["VIC", "Victoria"],
+  ["NSW", "New South Wales"],
+  ["QLD", "Queensland"],
+  ["SA", "South Australia"],
+  ["WA", "Western Australia"],
+  ["TAS", "Tasmania"],
+  ["NT", "the Northern Territory"],
+  ["ACT", "the ACT"],
+]);
+
+/**
+ * Ask which state a shared suburb name refers to, naming the candidates.
+ *
+ * 457 Victorian locality names are also used by another state, so this is the
+ * common case rather than an edge one. Naming them beats a vague "which state?":
+ * the user learns why they are being asked.
+ */
+export function ambiguousLocationFallback(
+  locality: string,
+  candidateStates: readonly string[],
+  what: "events" | "services"
+): string {
+  const names = candidateStates.map((s) => STATE_NAMES.get(s) ?? s);
+  const listed =
+    names.length <= 1
+      ? (names[0] ?? "more than one state")
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const subject = what === "events" ? "look for events" : "find services";
+  return `There's a ${titleCase(locality)} in ${listed}, and I don't want to guess which one you mean — the ${what} I'd point you at are Victorian. Which state, or what's the postcode? I'll ${subject} there.`;
+}
+
+function titleCase(locality: string): string {
+  return locality.replace(/\b[a-z]/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Assistant turns that left the conversation awaiting a location, for sessions
+ * whose assistant message predates `pendingAction` metadata.
+ *
+ * Transitional: `pendingAction` on the message is the real state, and is what
+ * new turns write. This keeps a conversation that was mid-retry across the
+ * deploy from dead-ending, and can be deleted once no live session predates it.
+ * Note that the parameterised ambiguity prompt is deliberately absent — it never
+ * existed before this change, so nothing in history can match it.
+ */
+const LEGACY_EVENTS_LOCATION_CONTEXT: ReadonlySet<string> = new Set([
+  EVENTS_NEEDS_LOCATION_FALLBACK,
+  EVENTS_EMPTY_FALLBACK,
+]);
+const LEGACY_SERVICES_LOCATION_CONTEXT: ReadonlySet<string> = new Set([
+  SERVICES_NEEDS_LOCATION_FALLBACK,
+  SERVICES_OUTSIDE_VICTORIA_FALLBACK,
+  SERVICES_EMPTY_FALLBACK,
+]);
+
 export type OrchestratorContext = {
   /** The new user turn. Same shape as the response agent's ctx. */
   userMessage: string;
   /** Prior conversation, oldest first. Does NOT include `userMessage`. */
   history: ChatHistoryMessage[];
   /**
-   * Optional city name (resolved client-side via browser geolocation +
-   * reverse geocoding). Currently only used by the events agent as a location
-   * hint; the orchestrator threads it through but does not require it.
+   * Structured browser fix (geolocation → `/api/geocode/reverse`). Carries the
+   * state, which a bare city name did not — and without a state a shared suburb
+   * name confirms nothing.
    */
-  city?: string | null;
+  geo?: GeoFix | null;
+  /**
+   * The client already tried browser geolocation for this turn and came back
+   * empty — denied, timed out, unsupported, or the reverse geocode failed.
+   * Distinguishes "ask the user to type a suburb" from "ask the browser first",
+   * so a denied permission is never reported as "no events found".
+   */
+  geolocationAttempted?: boolean;
 };
 
 /**
@@ -141,21 +225,76 @@ export type OrchestratorContext = {
  * coordinates. Takes the auth-bound Supabase client (used by RAG); the route
  * still owns the connection.
  */
-// Looks like the user is replying with just a city name (e.g. "melbourne",
-// "New York", "Saint Petersburg"). Used to detect follow-up to the "Which
-// city are you in?" prompt — the classifier won't catch a bare city as
-// events_request. Strict: short, letters/spaces/hyphens only, at most 3 tokens.
-function looksLikeBareCity(text: string): boolean {
-  const trimmed = text.trim();
-  if (trimmed.length === 0 || trimmed.length > 50) return false;
-  if (!/^[A-Za-z][A-Za-z\s-]*$/.test(trimmed)) return false;
-  return trimmed.split(/\s+/).length <= 3;
+/**
+ * Read a reply to "where are you?" as a location, or return `null` when it is
+ * really a change of subject.
+ *
+ * Two shapes, because people answer both ways. A bare "Burwood 3125" or "VIC" is
+ * the whole message, and is classified directly. But "I am in burwood east,
+ * 3151." is just as common a reply, and counting tokens cannot tell it from
+ * "actually, tell me about HPV instead" — both are six words. So the sentence
+ * form is settled by whether a location can be pulled out of it at all, which is
+ * a question about meaning rather than length.
+ */
+function locationReplyResolution(
+  message: string,
+  geo: GeoFix | null,
+  awaitingLocality?: string
+): LocationResolution | null {
+  if (looksLikeBareReply(message)) {
+    // "Victoria" in reply to "which Burwood?" answers *which one*; it is not a
+    // request to search the whole state. Rejoin it with the name we asked
+    // about, or the suburb is dropped and the search silently widens.
+    if (awaitingLocality && namesOnlyAState(message)) {
+      const rejoined = resolveLocationPhrase(`${awaitingLocality} ${message}`, geo);
+      if (rejoined.status !== "unknown" && rejoined.status !== "missing") return rejoined;
+    }
+    const resolved = resolveLocationPhrase(message, geo);
+    // "unknown" here means the bare reply named nothing we recognise, so it is
+    // more likely a new topic than a location — let the classifier have it.
+    if (resolved.status !== "unknown" && resolved.status !== "missing") return resolved;
+  }
+
+  const phrase = extractLocationPhrase(message);
+  return phrase === null ? null : resolveLocationPhrase(phrase, geo);
 }
 
-// Same idea for the services prompt, which asks for a "suburb or postcode" —
-// so a bare 4-digit postcode ("3053") also counts as a location reply.
-function looksLikeBareLocation(text: string): boolean {
-  return looksLikeBareCity(text) || /^\d{4}$/.test(text.trim());
+/** A message that is nothing but a place: "Burwood", "burwood vic", "3151". */
+function looksLikeBareReply(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length === 0 || trimmed.length > 60) return false;
+  if (!/^[A-Za-z0-9][A-Za-z0-9\s,.'-]*$/.test(trimmed)) return false;
+  return trimmed.split(/\s+/).length <= 4;
+}
+
+/** The location string to hand a tool, once the resolution has confirmed it. */
+function confirmedLocation(resolution: LocationResolution): string {
+  if (resolution.status !== "confirmed_vic") return "";
+  return resolution.postcode ?? resolution.locality;
+}
+
+/**
+ * The pending action a turn left behind: the metadata it recorded, or — for
+ * assistant turns written before that metadata existed — its text.
+ */
+function pendingActionFor(message: ChatHistoryMessage): PendingAction | null {
+  if (message.pendingAction) return message.pendingAction;
+  if (LEGACY_EVENTS_LOCATION_CONTEXT.has(message.content)) {
+    return { kind: "find_events", awaiting: "location" };
+  }
+  if (LEGACY_SERVICES_LOCATION_CONTEXT.has(message.content)) {
+    return { kind: "find_services", awaiting: "location" };
+  }
+  return null;
+}
+
+/**
+ * The scope to resume a location follow-up with. A "near me" question that has
+ * just been given a suburb is no longer about the browser's idea of where the
+ * user is, so it must not ask for geolocation again.
+ */
+function resumeScope(scope: EventsScope | undefined): EventsScope {
+  return scope === "statewide" ? "statewide" : "specified_location";
 }
 
 /**
@@ -165,23 +304,50 @@ function looksLikeBareLocation(text: string): boolean {
  * claims (spec §5.2). When the MCP is unreachable the user is pointed at the
  * existing `/clinics` page rather than left with nothing.
  */
-async function* dispatchServicesRequest(ctx: OrchestratorContext): AsyncIterable<AgentChunk> {
-  const city = ctx.city ?? null;
-  const { context, sources, needsLocation, outsideVictoria } = await runVictoriaServicesAgent({
-    userMessage: ctx.userMessage,
-    city,
-  });
+async function* dispatchServicesRequest(
+  ctx: OrchestratorContext,
+  override?: LocationResolution
+): AsyncIterable<AgentChunk> {
+  const resolution =
+    override ?? resolveLocation({ userMessage: ctx.userMessage, geo: ctx.geo ?? null });
+  const awaitingLocation: PendingAction = { kind: "find_services", awaiting: "location" };
 
-  if (needsLocation) {
-    yield { type: "text", text: SERVICES_NEEDS_LOCATION_FALLBACK };
+  if (resolution.status === "ambiguous") {
+    yield {
+      type: "text",
+      text: ambiguousLocationFallback(resolution.locality, resolution.candidateStates, "services"),
+    };
+    yield {
+      type: "pending_action",
+      action: { ...awaitingLocation, locality: resolution.locality },
+    };
     return;
   }
+  if (resolution.status === "outside_vic") {
+    // No pending action: asking for another suburb implies a different answer
+    // is available, and it isn't.
+    yield { type: "text", text: SERVICES_OUTSIDE_VICTORIA_FALLBACK };
+    return;
+  }
+  if (resolution.status !== "confirmed_vic") {
+    yield { type: "text", text: SERVICES_NEEDS_LOCATION_FALLBACK };
+    yield { type: "pending_action", action: awaitingLocation };
+    return;
+  }
+
+  const { context, sources, outsideVictoria } = await runVictoriaServicesAgent({
+    userMessage: ctx.userMessage,
+    location: confirmedLocation(resolution),
+  });
+
+  // The tool re-checks scope at the MCP boundary; honour a disagreement.
   if (outsideVictoria) {
     yield { type: "text", text: SERVICES_OUTSIDE_VICTORIA_FALLBACK };
     return;
   }
   if (sources.length === 0) {
     yield { type: "text", text: SERVICES_EMPTY_FALLBACK };
+    yield { type: "pending_action", action: awaitingLocation };
     return;
   }
 
@@ -193,17 +359,63 @@ async function* dispatchServicesRequest(ctx: OrchestratorContext): AsyncIterable
   });
 }
 
+/**
+ * Events, routed by how wide the question is.
+ *
+ * Only a statewide question ("what's on in Victoria?") may be answered without
+ * knowing where the user is. "Near me" and "in Burwood" are location-collection
+ * flows: querying without a confirmed location and reporting the empty result
+ * describes a search that was never scoped to them, which is what produced
+ * "I don't have access to real-time event listings" for a bare postcode.
+ */
 async function* dispatchEventsRequest(
   ctx: OrchestratorContext,
-  cityOverride: string | null = null
+  override?: { resolution: LocationResolution; scope?: EventsScope }
 ): AsyncIterable<AgentChunk> {
-  // Verified Victorian events come first for a Victorian turn: they are
-  // admin-approved and unexpired, where the general events tool is a live
-  // third-party search. Falls through to the existing agent when the MCP has
-  // nothing or is unavailable, so non-Victorian users are unaffected.
+  const resolution =
+    override?.resolution ?? resolveLocation({ userMessage: ctx.userMessage, geo: ctx.geo ?? null });
+  const scope = override?.scope ?? detectEventsScope(ctx.userMessage, resolution);
+  const pending = (geolocation?: boolean): PendingAction => ({
+    kind: "find_events",
+    awaiting: "location",
+    scope,
+    ...(geolocation ? { geolocation: true } : {}),
+  });
+
+  if (scope !== "statewide") {
+    if (resolution.status === "ambiguous") {
+      yield {
+        type: "text",
+        text: ambiguousLocationFallback(resolution.locality, resolution.candidateStates, "events"),
+      };
+      yield { type: "pending_action", action: { ...pending(), locality: resolution.locality } };
+      return;
+    }
+    if (resolution.status === "outside_vic") {
+      yield { type: "text", text: EVENTS_OUTSIDE_VICTORIA_FALLBACK };
+      return;
+    }
+    if (resolution.status !== "confirmed_vic") {
+      // A "near me" turn gets one shot at the browser before we make the user
+      // type anything — the permission prompt is then attached to their own
+      // request, which is both better UX and what browsers expect.
+      if (scope === "nearby" && !ctx.geolocationAttempted) {
+        yield { type: "pending_action", action: pending(true) };
+        return;
+      }
+      yield { type: "text", text: EVENTS_NEEDS_LOCATION_FALLBACK };
+      yield { type: "pending_action", action: pending() };
+      return;
+    }
+  }
+
+  // Verified Victorian events come first: they are admin-approved and unexpired,
+  // where the general events tool is a live third-party search. A statewide
+  // question passes no location, which is what the MCP wants for one.
+  const location = scope === "statewide" ? undefined : confirmedLocation(resolution);
   const victorian = await runVictoriaEventsAgent({
     userMessage: ctx.userMessage,
-    city: cityOverride ?? ctx.city ?? null,
+    ...(location ? { location } : {}),
   });
   if (victorian.sources.length > 0) {
     yield* runResponseAgent({
@@ -215,16 +427,16 @@ async function* dispatchEventsRequest(
     return;
   }
 
-  const { eventsContext, eventsSources, needsLocation } = await runEventsAgent({
+  // Nothing verified. The general events search is a genuine second look for a
+  // location we have confirmed, so an empty answer from it is a real "nothing
+  // found" rather than a scope failure dressed up as one.
+  const { eventsContext, eventsSources } = await runEventsAgent({
     userMessage: ctx.userMessage,
-    city: cityOverride ?? ctx.city ?? null,
+    city: location ?? "Victoria",
   });
-  if (needsLocation) {
-    yield { type: "text", text: EVENTS_NEEDS_LOCATION_FALLBACK };
-    return;
-  }
   if (eventsSources.length === 0) {
     yield { type: "text", text: EVENTS_EMPTY_FALLBACK };
+    yield { type: "pending_action", action: pending() };
     return;
   }
   yield* runResponseAgent({
@@ -239,28 +451,28 @@ export async function* runOrchestrator(
   supabase: SupabaseClient<Database>,
   ctx: OrchestratorContext
 ): AsyncIterable<AgentChunk> {
-  // City follow-up: the previous assistant turn was our "Which city?" prompt
-  // and the user replied with something that looks like a bare city name. The
-  // classifier won't see this as events_request (no events keywords) and the
-  // events agent's regex won't extract a location from a bare word, so we
-  // bridge the state here and route directly with the typed string as city.
+  // Location follow-up. The previous assistant turn asked where the user is and
+  // recorded that on its own message, so a reply of "burwood vic" or "3151"
+  // resumes the request it belongs to. The classifier can't see a bare place as
+  // a request, and reading the location out of the message won't work either —
+  // there is no "in"/"near" to anchor on — so the pending action is the only
+  // thing that keeps the conversation on-path.
   const lastAssistant = [...ctx.history].reverse().find((m) => m.role === "assistant");
-  if (
-    lastAssistant?.content === EVENTS_NEEDS_LOCATION_FALLBACK &&
-    looksLikeBareCity(ctx.userMessage)
-  ) {
-    console.info("[orchestrator] dispatch: events_request (city follow-up)");
-    yield* dispatchEventsRequest(ctx, ctx.userMessage.trim());
-    return;
-  }
-
-  // Same bridge for the services prompt above.
-  if (
-    lastAssistant?.content === SERVICES_NEEDS_LOCATION_FALLBACK &&
-    looksLikeBareLocation(ctx.userMessage)
-  ) {
-    console.info("[orchestrator] dispatch: services_request (location follow-up)");
-    yield* dispatchServicesRequest({ ...ctx, city: ctx.userMessage.trim() });
+  const pending = lastAssistant ? pendingActionFor(lastAssistant) : null;
+  const replyLocation = pending
+    ? locationReplyResolution(ctx.userMessage, ctx.geo ?? null, pending.locality)
+    : null;
+  if (pending && replyLocation) {
+    if (pending.kind === "find_events") {
+      console.info("[orchestrator] dispatch: events_request (location follow-up)");
+      yield* dispatchEventsRequest(ctx, {
+        resolution: replyLocation,
+        scope: resumeScope(pending.scope),
+      });
+    } else {
+      console.info("[orchestrator] dispatch: services_request (location follow-up)");
+      yield* dispatchServicesRequest(ctx, replyLocation);
+    }
     return;
   }
 
@@ -289,11 +501,9 @@ export async function* runOrchestrator(
     // fallback, so a non-Victorian user — or an unreachable MCP — is unaffected.
     let groundingContext = ragContext;
     let groundingSources = ragSources;
-    if (isVictorianTurn({ userMessage: ctx.userMessage, city: ctx.city ?? null })) {
-      const victorian = await runVictoriaHealthAgent({
-        userMessage: ctx.userMessage,
-        city: ctx.city ?? null,
-      });
+    const where = resolveLocation({ userMessage: ctx.userMessage, geo: ctx.geo ?? null });
+    if (where.status === "confirmed_vic") {
+      const victorian = await runVictoriaHealthAgent({ userMessage: ctx.userMessage });
       if (victorian.sources.length > 0) {
         groundingContext = victorian.context;
         groundingSources = victorian.sources;

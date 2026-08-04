@@ -35,7 +35,7 @@ describe("POST /api/geocode/reverse", () => {
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }) as never);
   });
 
-  test("returns city when Google response contains a locality component", async () => {
+  test("returns suburb, state and postcode from one result", async () => {
     server.use(
       http.get(GEOCODE_URL, () =>
         HttpResponse.json({
@@ -54,6 +54,7 @@ describe("POST /api/geocode/reverse", () => {
                   short_name: "VIC",
                   types: ["administrative_area_level_1", "political"],
                 },
+                { long_name: "3000", short_name: "3000", types: ["postal_code"] },
               ],
             },
           ],
@@ -62,10 +63,14 @@ describe("POST /api/geocode/reverse", () => {
     );
     const res = await POST(makeRequest({ lat: -37.8136, lng: 144.9631 }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ city: "Melbourne" });
+    // The state is the field that earns this route its keep: "Melbourne" alone
+    // would still leave the agent guessing for any shared suburb name.
+    expect(await res.json()).toEqual({ suburb: "Melbourne", state: "VIC", postcode: "3000" });
   });
 
-  test("falls back to administrative_area_level_2 when no locality is present", async () => {
+  test("completes a fix from a later result when the first is a street address", async () => {
+    // Google returns most-specific first, and that result often carries no
+    // postcode while the suburb-level one behind it does.
     server.use(
       http.get(GEOCODE_URL, () =>
         HttpResponse.json({
@@ -73,33 +78,10 @@ describe("POST /api/geocode/reverse", () => {
           results: [
             {
               address_components: [
-                {
-                  long_name: "Greater Manchester",
-                  short_name: "Greater Manchester",
-                  types: ["administrative_area_level_2", "political"],
-                },
-                {
-                  long_name: "England",
-                  short_name: "England",
-                  types: ["administrative_area_level_1", "political"],
-                },
+                { long_name: "123", short_name: "123", types: ["street_number"] },
+                { long_name: "Burwood", short_name: "Burwood", types: ["locality", "political"] },
               ],
             },
-          ],
-        })
-      )
-    );
-    const res = await POST(makeRequest({ lat: 53.4808, lng: -2.2426 }));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ city: "Greater Manchester" });
-  });
-
-  test("falls back to administrative_area_level_1 when no locality or level_2", async () => {
-    server.use(
-      http.get(GEOCODE_URL, () =>
-        HttpResponse.json({
-          status: "OK",
-          results: [
             {
               address_components: [
                 {
@@ -107,39 +89,103 @@ describe("POST /api/geocode/reverse", () => {
                   short_name: "VIC",
                   types: ["administrative_area_level_1", "political"],
                 },
-                { long_name: "Australia", short_name: "AU", types: ["country", "political"] },
+                { long_name: "3125", short_name: "3125", types: ["postal_code"] },
               ],
             },
           ],
         })
       )
     );
-    const res = await POST(makeRequest({ lat: -37, lng: 144 }));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ city: "Victoria" });
+    const res = await POST(makeRequest({ lat: -37.85, lng: 145.11 }));
+    expect(await res.json()).toEqual({ suburb: "Burwood", state: "VIC", postcode: "3125" });
   });
 
-  test("returns city=null on ZERO_RESULTS", async () => {
+  test("reports missing fields as null rather than substituting a region", async () => {
+    // The old route fell back to administrative_area_level_2, then to the state,
+    // and called any of them "city". A state is not a suburb, and treating it as
+    // one is how a weak location reached the tools in the first place.
+    server.use(
+      http.get(GEOCODE_URL, () =>
+        HttpResponse.json({
+          status: "OK",
+          results: [
+            {
+              address_components: [
+                {
+                  long_name: "Greater Geelong",
+                  short_name: "Greater Geelong",
+                  types: ["administrative_area_level_2", "political"],
+                },
+                {
+                  long_name: "Victoria",
+                  short_name: "VIC",
+                  types: ["administrative_area_level_1", "political"],
+                },
+              ],
+            },
+          ],
+        })
+      )
+    );
+    const res = await POST(makeRequest({ lat: -38.1, lng: 144.3 }));
+    expect(await res.json()).toEqual({ suburb: null, state: "VIC", postcode: null });
+  });
+
+  test("returns an empty fix on ZERO_RESULTS", async () => {
     server.use(
       http.get(GEOCODE_URL, () => HttpResponse.json({ status: "ZERO_RESULTS", results: [] }))
     );
     const res = await POST(makeRequest({ lat: 0, lng: 0 }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ city: null });
+    expect(await res.json()).toEqual({ suburb: null, state: null, postcode: null });
   });
 
-  test("returns city=null when upstream returns non-2xx", async () => {
+  test("returns an empty fix when upstream returns non-2xx", async () => {
     server.use(http.get(GEOCODE_URL, () => HttpResponse.json({ error: "boom" }, { status: 500 })));
     const res = await POST(makeRequest({ lat: 1, lng: 1 }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ city: null });
+    expect(await res.json()).toEqual({ suburb: null, state: null, postcode: null });
   });
 
-  test("returns city=null when upstream fetch throws", async () => {
+  test("returns an empty fix when upstream fetch throws", async () => {
     server.use(http.get(GEOCODE_URL, () => HttpResponse.error()));
     const res = await POST(makeRequest({ lat: 1, lng: 1 }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ city: null });
+    expect(await res.json()).toEqual({ suburb: null, state: null, postcode: null });
+  });
+
+  test("logs a rejected key rather than passing it off as an empty fix", async () => {
+    // Google answers REQUEST_DENIED with HTTP 200, so a disabled Geocoding API
+    // is indistinguishable from "we couldn't place you" unless it is logged.
+    // This is exactly how a working geolocation flow looked broken.
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    server.use(
+      http.get(GEOCODE_URL, () =>
+        HttpResponse.json({
+          status: "REQUEST_DENIED",
+          error_message: "This API is not activated on your API project.",
+        })
+      )
+    );
+
+    const res = await POST(makeRequest({ lat: -37.85, lng: 145.11 }));
+
+    expect(await res.json()).toEqual({ suburb: null, state: null, postcode: null });
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("REQUEST_DENIED"));
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("not activated"));
+    spy.mockRestore();
+  });
+
+  test("stays quiet when the coordinates simply match nothing", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    server.use(
+      http.get(GEOCODE_URL, () => HttpResponse.json({ status: "ZERO_RESULTS", results: [] }))
+    );
+
+    await POST(makeRequest({ lat: 0, lng: 0 }));
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   test("returns 401 when no user", async () => {

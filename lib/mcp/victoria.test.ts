@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CROSS_STATE_LOCALITIES, VIC_LOCALITIES } from "./vic-localities.generated";
 import { melbourneToday, normalizeLocation, resolveVictoriaScope } from "./victoria";
 
 /**
@@ -41,15 +42,127 @@ describe("resolveVictoriaScope", () => {
     }
   );
 
-  it("accepts an unlisted suburb when it carries an explicit state marker", () => {
-    // The locality list can't hold every Victorian suburb; the state marker is
-    // what lets the long tail through.
+  it("accepts a suburb carrying an explicit state marker", () => {
     expect(resolveVictoriaScope("Kangaroo Ground VIC").inVictoria).toBe(true);
     expect(resolveVictoriaScope("Yackandandah, Victoria").inVictoria).toBe(true);
   });
 
-  it("rejects an unlisted suburb with no state marker", () => {
-    expect(resolveVictoriaScope("Kangaroo Ground").inVictoria).toBe(false);
+  it("rejects a place that is in no Victorian gazetteer, state marker or not", () => {
+    expect(resolveVictoriaScope("Kangaroo Valley").inVictoria).toBe(false);
+    expect(resolveVictoriaScope("Wollongong").inVictoria).toBe(false);
+  });
+
+  /**
+   * The hand-maintained allowlist this replaced held 183 names, so a real
+   * resident of Vermont — a suburb with its own postcode 20km from the CBD —
+   * was told we don't cover Victoria. These are the names it missed.
+   */
+  it.each([
+    "Vermont",
+    "Vermont South",
+    "Bend of Islands",
+    "Kangaroo Ground",
+    "Yackandandah",
+    "Hoppers Crossing",
+    "Airport West",
+    "Point Cook",
+    "Glen Waverley",
+    "Burwood East",
+    "Brighton East",
+    "Tullamarine",
+    "Wandin North",
+    "Koo Wee Rup",
+  ])("recognises the Victorian locality %s", (input) => {
+    const scope = resolveVictoriaScope(input);
+    expect(scope.inVictoria).toBe(true);
+    if (scope.inVictoria) expect(scope.kind).toBe("suburb");
+  });
+
+  it.each(["3133", "3151", "3125", "3121"])("recognises the Victorian postcode %s", (input) => {
+    const scope = resolveVictoriaScope(input);
+    expect(scope.inVictoria).toBe(true);
+    if (scope.inVictoria) expect(scope.kind).toBe("postcode");
+  });
+
+  it("covers the whole state, not just the metro area the allowlist favoured", () => {
+    // A 183-name list was always going to be metro-biased. The dataset is not.
+    expect(VIC_LOCALITIES.size).toBeGreaterThan(3000);
+  });
+
+  it("excludes localities that exist only in other states", () => {
+    for (const name of ["bondi", "parramatta", "toowoomba", "fremantle", "glenelg north"]) {
+      expect(VIC_LOCALITIES.has(name)).toBe(false);
+    }
+  });
+
+  it("excludes mail facilities that are not places", () => {
+    // Some of these are typed 'Delivery Area' in the dataset despite naming a
+    // post-office counter rather than a suburb, so the type filter alone misses
+    // them. 'NORTH POLE, VIC 9999' is a joke row the postcode range catches.
+    for (const name of [
+      "were street po",
+      "domain road po",
+      "booran road po",
+      "epping dc",
+      "geelong mc",
+      "north pole",
+    ]) {
+      expect(VIC_LOCALITIES.has(name)).toBe(false);
+    }
+    // ...but the suburb an 'Epping DC' row shadows must survive.
+    expect(VIC_LOCALITIES.has("epping")).toBe(true);
+  });
+
+  it("flags names shared with another state without deciding them", () => {
+    // resolveVictoriaScope is the MCP-boundary gate and stays permissive; the
+    // agent layer is what refuses to guess. Both halves are asserted here so the
+    // split cannot silently collapse into one behaviour.
+    for (const name of ["richmond", "brighton", "st kilda", "preston"]) {
+      expect(VIC_LOCALITIES.has(name)).toBe(true);
+      expect(CROSS_STATE_LOCALITIES.has(name)).toBe(true);
+      expect(resolveVictoriaScope(name).inVictoria).toBe(true);
+    }
+  });
+
+  it("does not flag names unique to Victoria", () => {
+    for (const name of ["vermont south", "hoppers crossing", "bend of islands", "koo wee rup"]) {
+      expect(CROSS_STATE_LOCALITIES.has(name)).toBe(false);
+    }
+  });
+
+  // Victoria names a whole class of suburbs "<listed suburb> <compass point>".
+  // Requiring each one in the allowlist means a real resident of Burwood East is
+  // told we don't cover their area — the worst failure this resolver can produce.
+  it.each([
+    "Burwood East",
+    "Brighton East",
+    "Bentleigh East",
+    "Doncaster East",
+    "Glen Waverley South",
+    "Preston West",
+    "Ringwood North",
+  ])("accepts %s, a compass-suffixed form of a listed locality", (input) => {
+    const scope = resolveVictoriaScope(input);
+    expect(scope.inVictoria).toBe(true);
+    if (scope.inVictoria) expect(scope.kind).toBe("suburb");
+  });
+
+  it.each(["North Melbourne", "East Melbourne", "South Melbourne", "Carlton North"])(
+    "still accepts %s, which is a listed locality in its own right",
+    (input) => {
+      expect(resolveVictoriaScope(input).inVictoria).toBe(true);
+    }
+  );
+
+  it.each(["Bondi East", "Sydney North", "Perth South", "Fremantle West"])(
+    "does not accept %s — the compass suffix must not rescue an unlisted base name",
+    (input) => {
+      expect(resolveVictoriaScope(input).inVictoria).toBe(false);
+    }
+  );
+
+  it.each(["east", "north", "south west"])("does not accept the bare compass word %s", (input) => {
+    expect(resolveVictoriaScope(input).inVictoria).toBe(false);
   });
 
   it("lets a postcode override a misleading place name", () => {

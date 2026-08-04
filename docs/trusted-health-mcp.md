@@ -32,7 +32,11 @@ supabase/migrations/20260803120000_create_trusted_health_mcp.sql
 
 lib/mcp/
   schemas.ts        Zod input/output contracts (spec §5) + MAX_RESULTS
-  victoria.ts       Victorian scope resolution (postcodes, localities, statewide)
+  victoria.ts       Victorian scope gate at the MCP boundary (postcode, gazetteer, statewide)
+  vic-localities.generated.ts
+                    GENERATED. The state gazetteer: 3,317 Victorian localities,
+                    the 457 shared with another state, and 12,568 non-Victorian
+                    names. Rebuild with `pnpm vic:localities`; never hand-edit.
   sources.ts        the trusted-source allowlist: host matching + verification labels
   health-info.ts    search_victoria_health_info query
   directory.ts      find_victoria_screening_services query + URL templating
@@ -46,9 +50,64 @@ lib/mcp/
   admin-actions.ts  approve/revoke server actions
 
 app/api/mcp/route.ts                     the endpoint
+lib/agents/location.ts                   confirms a location before any tool is called
+lib/agents/events-scope.ts               statewide vs nearby vs a named place
+lib/ai/pending-action.ts                 what an assistant turn is waiting for
 lib/agents/victoria-agent.ts             orchestrator adapter
 app/(app)/admin/trusted-health/          the governance UI
 ```
+
+---
+
+## How a location gets confirmed
+
+Scope lives in two layers, and the split is load-bearing.
+
+**`lib/agents/location.ts` — the agent layer.** Decides whether a turn has a
+usable location *before* any tool is called, returning `confirmed_vic`,
+`ambiguous`, `outside_vic`, `missing`, or `unknown`. This is where the refusal
+to guess lives: a name shared with another state returns `ambiguous` and asks
+which, and no tool runs.
+
+**`lib/mcp/victoria.ts` — the MCP boundary.** `resolveVictoriaScope` answers only
+"could this string be in Victoria?" and is deliberately permissive about shared
+names: `resolveVictoriaScope("Richmond").inVictoria` is `true`. By the time a
+string reaches it, the agent layer has already settled which Richmond. It is a
+backstop against a malformed tool call, not the place ambiguity is resolved.
+
+Do not "fix" the boundary gate to reject shared names. It would break statewide
+queries and the admin path, and it is not where the user can be asked a question.
+
+### The events flow
+
+`detectEventsScope` splits events questions three ways, because only one may be
+answered without knowing where the user is:
+
+| Scope | Trigger | Location required |
+|---|---|---|
+| `statewide` | "what's on in Victoria?" | No — queried with no location |
+| `nearby` | "near me", or no place named at all | Yes |
+| `specified_location` | "events in Burwood East" | Yes |
+
+A `nearby` turn with no location emits a `location_request` stream event rather
+than text. The client raises the browser permission prompt *then* — attached to
+the question the user just asked, not on page load — and resends the same turn
+as a `continuation`, which is why the route skips re-inserting the user message.
+A denial, timeout, or failed reverse geocode comes back flagged
+`geolocationAttempted`, and the user is asked to type a suburb. None of these
+paths may report "no events found".
+
+### Resuming after a question
+
+An assistant turn that asks for a location records a `pendingAction` in
+`chat_messages.metadata`. The next turn reads it to route a bare "3151" or
+"Burwood VIC" back into the request it belongs to.
+
+This replaced matching the previous turn's text against a set of known fallback
+strings, which could not survive a prompt that names the suburb it is asking
+about, and silently dropped every mid-retry conversation whenever the copy was
+edited. The old string sets remain in `orchestrator.ts` as a transitional read
+path for sessions predating the metadata, and can be deleted once none are live.
 
 ---
 

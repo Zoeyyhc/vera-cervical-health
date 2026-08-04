@@ -1,6 +1,7 @@
 import { CLAUDE_MODEL } from "@/lib/ai/anthropic";
 import type { ChatHistoryMessage } from "@/lib/ai/context-window";
 import { loggedMessagesStream } from "@/lib/ai/logged-anthropic";
+import type { PendingAction } from "@/lib/ai/pending-action";
 import { CITATION_INSTRUCTION, RESPONSE_DEFAULT_PROMPT } from "@/lib/ai/prompts";
 import type { Source } from "@/types/agents";
 import type Anthropic from "@anthropic-ai/sdk";
@@ -32,7 +33,16 @@ export type ResponseAgentContext = {
   systemPrompt?: string;
 };
 
-export type AgentChunk = { type: "text"; text: string } | { type: "sources"; sources: Source[] };
+export type AgentChunk =
+  | { type: "text"; text: string }
+  | { type: "sources"; sources: Source[] }
+  /**
+   * Emitted by the orchestrator, never by this agent: the turn ended waiting on
+   * something from the user. The route persists it onto the assistant message so
+   * the next turn can resume, and forwards it to the client when it wants a
+   * geolocation prompt.
+   */
+  | { type: "pending_action"; action: PendingAction };
 
 /**
  * Pure response-agent function. Yields each text delta from Claude as it

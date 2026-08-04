@@ -8,6 +8,7 @@ All route handlers are in `app/api/` using Next.js App Router conventions (`rout
 |---|---|---|---|
 | `/api/chat` | POST | `user` | Main agent orchestration entry point. Streams token-by-token. |
 | `/api/chat/[sessionId]` | GET | `user` | Fetch message history for a session. |
+| `/api/geocode/reverse` | POST | `user` | Reverse-geocodes a lat/lng to suburb/state/postcode via Google Maps. |
 | `/api/clinics/search` | GET | None (public) | Proxy to Google Places API (New) — Text Search endpoint. |
 | `/api/news` | GET | None (public) | Proxy to NewsAPI. Keeps `NEWS_API_KEY` server-side. |
 | `/api/events` | GET | None (public) | Proxy to SerpAPI Google Events. Keeps `SERPAPI_KEY` server-side. |
@@ -23,14 +24,63 @@ All route handlers are in `app/api/` using Next.js App Router conventions (`rout
 ### `POST /api/chat`
 
 **Auth:** `user` role required  
-**Body:** `{ sessionId: string, message: string }`  
-**Response:** Streamed NDJSON of `start` / `text` / `sources` / `done` / `error` events.  
+**Body:**
+
+```ts
+{
+  message: string;
+  sessionId?: string;
+  // Reverse-geocoded browser position. The state is the load-bearing field:
+  // a suburb name alone confirms nothing for the 457 shared with another state.
+  geo?: { suburb?: string; state?: string; postcode?: string };
+  // The client tried geolocation and got nothing — denied, timed out,
+  // unsupported, or the reverse geocode failed.
+  geolocationAttempted?: boolean;
+  // Resend of a turn the server asked the client to complete with a location.
+  // The user message is already persisted, so it is not written again.
+  continuation?: boolean;
+}
+```
+
+**Response:** Streamed NDJSON of `start` / `text` / `sources` / `location_request` / `done` / `error` events.  
 **Notes:** Entry point for the full agent pipeline. The orchestrator classifies intent and dispatches:
 
 - `health_question` → RAG agent → response agent (RAG chunks injected as grounding context)
 - `news_request` → news agent → response agent (news headlines injected as grounding context). Static fallback text when NewsAPI returns nothing.
-- `events_request` → events agent → response agent (events injected as grounding context). The route reads `profiles.locale` and threads it as a location hint. Static fallback text when (a) no location can be resolved, or (b) SerpAPI returns nothing.
+- `services_request` → Victoria MCP → response agent, once a location is confirmed
+- `events_request` → verified Victorian events (MCP), then the general events agent, once a location is confirmed
 - `general_chat` → response agent directly
+
+Both location-scoped paths confirm a location **before** calling any tool. A
+shared suburb name is asked about rather than guessed, and an out-of-Victoria
+request gets the scope explained rather than an empty result. See
+`docs/trusted-health-mcp.md`.
+
+`location_request` is emitted instead of text when a "near me" turn needs a
+position: nothing is said and nothing is persisted, the client raises the browser
+permission prompt, and the same turn is resent as a `continuation`.
+
+An assistant turn that asks for a location records a `pendingAction` in
+`chat_messages.metadata`, so a bare `3151` reply resumes the original request.
+
+### `POST /api/geocode/reverse`
+
+**Auth:** `user` role required  
+**Body:** `{ lat: number, lng: number }`  
+**Response:** `{ suburb: string | null, state: string | null, postcode: string | null }`  
+**Notes:** Called by the chat client after a "near me" question, never on page
+load. `state` is the short form (`"VIC"`), because that is what the location
+resolver matches on and what makes a shared suburb name usable.
+
+Fields are read independently across all returned results: the most specific
+result is often a street address carrying no postcode while the suburb-level one
+behind it does. Missing fields come back `null` rather than being filled with a
+region or a state — a state is not a suburb, and substituting one is how a weak
+location used to reach the tools.
+
+Every failure (upstream error, non-2xx, `ZERO_RESULTS`) returns
+`{ suburb: null, state: null, postcode: null }` with status 200, so the client
+asks the user to type a suburb instead of reporting an empty search.
 
 ### `GET /api/chat/[sessionId]`
 

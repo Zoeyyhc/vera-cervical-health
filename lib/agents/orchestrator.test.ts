@@ -218,6 +218,7 @@ vi.mock("@/lib/ai/rag-gap", async (importOriginal) => {
 import { recordAbuseEvent } from "@/lib/ai/abuse";
 import { recordRagGap } from "@/lib/ai/rag-gap";
 import {
+  EVENTS_EMPTY_FALLBACK,
   EVENTS_NEEDS_LOCATION_FALLBACK,
   INJECTION_REFUSAL,
   type OrchestratorContext,
@@ -244,6 +245,13 @@ const baseCtx: OrchestratorContext = {
   userMessage: "What is HPV?",
   history: [] as ChatHistoryMessage[],
 };
+
+/**
+ * What an assistant turn that asked "where are you?" records on itself. The
+ * follow-up bridge keys off this rather than the wording of the reply, so the
+ * copy can change without silently dropping every mid-retry conversation.
+ */
+const PENDING_EVENTS = { kind: "find_events", awaiting: "location" } as const;
 
 describe("runOrchestrator", () => {
   test("injection_attempt: refuses, records abuse, calls no sub-agent", async () => {
@@ -461,13 +469,13 @@ describe("runOrchestrator", () => {
       ]) as never
     );
 
-    const ctx: OrchestratorContext = { ...baseCtx, city: "Sydney" };
+    const ctx: OrchestratorContext = { ...baseCtx, userMessage: "any events in glen waverley" };
     const chunks = await collectOrchestrator(ctx);
 
     expect(runEventsAgent).toHaveBeenCalledTimes(1);
     expect(runEventsAgent).toHaveBeenCalledWith({
       userMessage: ctx.userMessage,
-      city: "Sydney",
+      city: "glen waverley",
     });
     expect(runResponseAgent).toHaveBeenCalledTimes(1);
     const callArg = vi.mocked(runResponseAgent).mock.calls[0][0];
@@ -480,41 +488,34 @@ describe("runOrchestrator", () => {
     ]);
   });
 
-  test("events_request with needsLocation: yields a 'which city?' fallback; skips response agent", async () => {
+  test("events_request with no location: asks where, and searches nothing", async () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("events_request") as never);
-    vi.mocked(runEventsAgent).mockResolvedValue({
-      eventsContext: "",
-      eventsSources: [],
-      needsLocation: true,
-    });
 
-    const chunks = await collectOrchestrator(baseCtx);
+    const chunks = await collectOrchestrator({ ...baseCtx, geolocationAttempted: true });
 
     expect(runResponseAgent).not.toHaveBeenCalled();
-    expect(chunks).toHaveLength(1);
-    if (chunks[0].type === "text") {
-      expect(chunks[0].text.toLowerCase()).toContain("city");
-    }
+    expect(runEventsAgent).not.toHaveBeenCalled();
+    expect(chunks[0]).toEqual({ type: "text", text: EVENTS_NEEDS_LOCATION_FALLBACK });
   });
 
   test("events_request with empty results (location was used): yields a fallback text chunk; skips response agent", async () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("events_request") as never);
     vi.mocked(runEventsAgent).mockResolvedValue({ eventsContext: "", eventsSources: [] });
 
-    const chunks = await collectOrchestrator({ ...baseCtx, city: "Sydney" });
+    const chunks = await collectOrchestrator({
+      ...baseCtx,
+      userMessage: "any events in glen waverley",
+    });
 
     expect(runResponseAgent).not.toHaveBeenCalled();
-    expect(chunks).toHaveLength(1);
-    if (chunks[0].type === "text") {
-      expect(chunks[0].text.toLowerCase()).toContain("events");
-    }
+    expect(chunks[0]).toEqual({ type: "text", text: EVENTS_EMPTY_FALLBACK });
   });
 
   test("events_request never calls runRagAgent", async () => {
     vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("events_request") as never);
     vi.mocked(runEventsAgent).mockResolvedValue({ eventsContext: "", eventsSources: [] });
 
-    await collectOrchestrator({ ...baseCtx, city: "Sydney" });
+    await collectOrchestrator({ ...baseCtx, userMessage: "any events in glen waverley" });
 
     expect(runRagAgent).not.toHaveBeenCalled();
   });
@@ -543,7 +544,11 @@ describe("runOrchestrator", () => {
       userMessage: "melbourne",
       history: [
         { role: "user", content: "any events near me?" },
-        { role: "assistant", content: EVENTS_NEEDS_LOCATION_FALLBACK },
+        {
+          role: "assistant",
+          content: EVENTS_NEEDS_LOCATION_FALLBACK,
+          pendingAction: PENDING_EVENTS,
+        },
       ],
     };
     await collectOrchestrator(ctx);
@@ -554,6 +559,55 @@ describe("runOrchestrator", () => {
       city: "melbourne",
     });
     expect(runResponseAgent).toHaveBeenCalledTimes(1);
+  });
+
+  test("city follow-up: a bare city reply after an empty-events answer retries events for that city", async () => {
+    // "Nothing in Burwood East" → "melbourne" is a retry, not a topic change.
+    // Without the bridge the classifier reads a bare city as general_chat and
+    // the response agent answers about events with no grounding at all.
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("general_chat") as never);
+    vi.mocked(runEventsAgent).mockResolvedValue({ eventsContext: "", eventsSources: [] });
+
+    const ctx: OrchestratorContext = {
+      userMessage: "melbourne",
+      history: [
+        { role: "user", content: "what events are happening near me?" },
+        { role: "assistant", content: EVENTS_NEEDS_LOCATION_FALLBACK },
+        { role: "user", content: "burwood east" },
+        { role: "assistant", content: EVENTS_EMPTY_FALLBACK, pendingAction: PENDING_EVENTS },
+      ],
+    };
+    const chunks = await collectOrchestrator(ctx);
+
+    expect(runEventsAgent).toHaveBeenCalledWith({
+      userMessage: "melbourne",
+      city: "melbourne",
+    });
+    // Still empty for Melbourne — but the honest fallback, not an ungrounded
+    // improvisation from the response agent.
+    expect(chunks[0]).toEqual({ type: "text", text: EVENTS_EMPTY_FALLBACK });
+    expect(runResponseAgent).not.toHaveBeenCalled();
+  });
+
+  test("city follow-up: a bare postcode reply bridges to events, same as a city name", async () => {
+    // A postcode is the more precise location signal, not a lesser one — the
+    // Victorian resolver treats it as decisive. Dropping it here sends the turn
+    // to general_chat, where the response agent has no events grounding at all.
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("general_chat") as never);
+    vi.mocked(runEventsAgent).mockResolvedValue({ eventsContext: "", eventsSources: [] });
+
+    const ctx: OrchestratorContext = {
+      userMessage: "3151",
+      history: [
+        { role: "user", content: "what events are happening near me?" },
+        { role: "assistant", content: EVENTS_EMPTY_FALLBACK, pendingAction: PENDING_EVENTS },
+      ],
+    };
+    const chunks = await collectOrchestrator(ctx);
+
+    expect(runEventsAgent).toHaveBeenCalledWith({ userMessage: "3151", city: "3151" });
+    expect(chunks[0]).toEqual({ type: "text", text: EVENTS_EMPTY_FALLBACK });
+    expect(runResponseAgent).not.toHaveBeenCalled();
   });
 
   test("city follow-up: does NOT fire when the last assistant turn was something else", async () => {
@@ -584,7 +638,11 @@ describe("runOrchestrator", () => {
       userMessage: "actually, tell me about HPV instead",
       history: [
         { role: "user", content: "any events near me?" },
-        { role: "assistant", content: EVENTS_NEEDS_LOCATION_FALLBACK },
+        {
+          role: "assistant",
+          content: EVENTS_NEEDS_LOCATION_FALLBACK,
+          pendingAction: PENDING_EVENTS,
+        },
       ],
     };
     await collectOrchestrator(ctx);

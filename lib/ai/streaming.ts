@@ -16,6 +16,17 @@ export type ChatStreamEvent =
   | { type: "start"; sessionId: string }
   | { type: "text"; text: string }
   | { type: "sources"; sources: Source[] }
+  /**
+   * The turn needs to know where the user is and the client should offer a
+   * browser geolocation prompt, then resend the same turn as a `continuation`
+   * carrying whatever it resolved. Emitted instead of `text` — nothing is shown
+   * and nothing is persisted, because the turn has not been answered yet.
+   *
+   * The prompt is deliberately raised here rather than on page load: browsers
+   * treat a permission request tied to a user's own "what's near me?" as
+   * legitimate, and one raised on mount as a nuisance.
+   */
+  | { type: "location_request" }
   | { type: "done" }
   | { type: "error"; message: string };
 

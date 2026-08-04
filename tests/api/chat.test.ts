@@ -234,12 +234,18 @@ describe("POST /api/chat", () => {
       role: "assistant",
       content: "Hello there!",
       sources: null,
+      metadata: null,
     });
 
     // Orchestrator was called with the supabase client + userMessage + (empty) history
     expect(runOrchestrator).toHaveBeenCalledTimes(1);
     const [, ctxArg] = vi.mocked(runOrchestrator).mock.calls[0];
-    expect(ctxArg).toEqual({ userMessage: "Hi", history: [], city: null });
+    expect(ctxArg).toEqual({
+      userMessage: "Hi",
+      history: [],
+      geo: null,
+      geolocationAttempted: undefined,
+    });
   });
 
   test("passes prior session history through to the orchestrator on a follow-up turn", async () => {
@@ -265,14 +271,19 @@ describe("POST /api/chat", () => {
     expect(ctxArg).toEqual({
       userMessage: "How is it transmitted?",
       history: [
-        { role: "user", content: "What is HPV?" },
-        { role: "assistant", content: "HPV stands for human papillomavirus..." },
+        { role: "user", content: "What is HPV?", pendingAction: null },
+        {
+          role: "assistant",
+          content: "HPV stands for human papillomavirus...",
+          pendingAction: null,
+        },
       ],
-      city: null,
+      geo: null,
+      geolocationAttempted: undefined,
     });
   });
 
-  test("threads body.city through to the orchestrator", async () => {
+  test("threads the structured geo fix through to the orchestrator", async () => {
     const fromChain = mockSupabaseChain({ historyRows: [] });
     vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
     mockOrchestratorYields([{ type: "text", text: "ok" }]);
@@ -281,13 +292,93 @@ describe("POST /api/chat", () => {
       postRequest({
         message: "events near me?",
         sessionId: "c3aab8b6-3a89-4dc1-9bbb-dca08fee48f4",
-        city: "Melbourne",
+        geo: { suburb: "Burwood", state: "VIC", postcode: "3125" },
+        geolocationAttempted: true,
       })
     );
     await readNdjsonStream(res);
 
     const [, ctxArg] = vi.mocked(runOrchestrator).mock.calls[0];
-    expect(ctxArg).toMatchObject({ city: "Melbourne" });
+    expect(ctxArg).toMatchObject({
+      geo: { suburb: "Burwood", state: "VIC", postcode: "3125" },
+      geolocationAttempted: true,
+    });
+  });
+
+  test("persists a pending action onto the message that asked for a location", async () => {
+    // This is what lets the next turn resume the request. Without it the
+    // orchestrator is back to matching the previous turn's exact wording.
+    const fromChain = mockSupabaseChain({ historyRows: [] });
+    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    mockOrchestratorYields([
+      { type: "text", text: "Which suburb and state are you in?" },
+      { type: "pending_action", action: { kind: "find_events", awaiting: "location" } },
+    ]);
+
+    const res = await POST(
+      postRequest({
+        message: "any events near me?",
+        sessionId: "c3aab8b6-3a89-4dc1-9bbb-dca08fee48f4",
+      })
+    );
+    await readNdjsonStream(res);
+
+    expect(fromChain.messageInsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        role: "assistant",
+        metadata: { pendingAction: { kind: "find_events", awaiting: "location" } },
+      })
+    );
+  });
+
+  test("answers a geolocation request without saying or persisting anything", async () => {
+    const fromChain = mockSupabaseChain({ historyRows: [] });
+    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    mockOrchestratorYields([
+      {
+        type: "pending_action",
+        action: { kind: "find_events", awaiting: "location", geolocation: true },
+      },
+    ]);
+
+    const res = await POST(
+      postRequest({
+        message: "any events near me?",
+        sessionId: "c3aab8b6-3a89-4dc1-9bbb-dca08fee48f4",
+      })
+    );
+    const events = await readNdjsonStream(res);
+
+    expect(events.map((e) => (e as { type: string }).type)).toEqual([
+      "start",
+      "location_request",
+      "done",
+    ]);
+    // The turn has not been answered, so no assistant message exists yet — only
+    // the user message written before the stream opened.
+    expect(fromChain.messageInsert).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not write the user message twice on a continuation", async () => {
+    // The client resends the same turn after resolving a location. The message
+    // row already exists; writing it again would duplicate it in the transcript
+    // and in the history sent to Claude.
+    const fromChain = mockSupabaseChain({ historyRows: [] });
+    vi.mocked(createClient).mockReturnValue(mockSupabase({ id: "u1" }, fromChain) as never);
+    mockOrchestratorYields([{ type: "text", text: "Here's what's on." }]);
+
+    const res = await POST(
+      postRequest({
+        message: "any events near me?",
+        sessionId: "c3aab8b6-3a89-4dc1-9bbb-dca08fee48f4",
+        continuation: true,
+        geo: { suburb: "Burwood", state: "VIC", postcode: "3125" },
+      })
+    );
+    await readNdjsonStream(res);
+
+    const roles = fromChain.messageInsert.mock.calls.map((c) => c[0].role);
+    expect(roles).toEqual(["assistant"]);
   });
 
   test("with a provided sessionId, reuses it (no new session insert)", async () => {
