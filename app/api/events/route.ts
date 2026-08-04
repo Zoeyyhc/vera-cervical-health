@@ -13,14 +13,17 @@ export async function GET(request: Request) {
     return Response.json({ error: "invalid_request" }, { status: 400 });
   }
 
-  const events = await searchEventsApi({
+  const result = await searchEventsApi({
     location: parsed.data.location,
     query: parsed.data.q,
     max_results: parsed.data.max,
   });
 
-  if (events.length === 0) {
-    return Response.json({ events: [], error: "unavailable" });
+  if (result.status === "no_results") {
+    return Response.json({ events: [], error: "no_results" });
   }
-  return Response.json({ events });
+  if (result.status === "upstream_unavailable") {
+    return Response.json({ events: [], error: "upstream_unavailable" });
+  }
+  return Response.json({ events: result.events });
 }

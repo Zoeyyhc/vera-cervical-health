@@ -24,7 +24,7 @@ function ev(overrides: Partial<HealthEvent> = {}): HealthEvent {
 describe("runEventsAgent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(findHealthEvents).mockResolvedValue([]);
+    vi.mocked(findHealthEvents).mockResolvedValue({ status: "no_results" });
   });
 
   test("calls findHealthEvents with caller-provided city as location", async () => {
@@ -74,24 +74,36 @@ describe("runEventsAgent", () => {
     });
   });
 
-  test("returns empty result when tool returns []", async () => {
-    vi.mocked(findHealthEvents).mockResolvedValue([]);
+  test("returns empty result when tool returns no_results", async () => {
+    vi.mocked(findHealthEvents).mockResolvedValue({ status: "no_results" });
 
     const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
     expect(result).toEqual({ eventsContext: "", eventsSources: [] });
     expect(result).not.toHaveProperty("needsLocation", true);
+    expect(result).not.toHaveProperty("unavailable", true);
+  });
+
+  test("returns unavailable=true when tool returns upstream_unavailable", async () => {
+    vi.mocked(findHealthEvents).mockResolvedValue({ status: "upstream_unavailable" });
+
+    const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
+
+    expect(result).toEqual({ eventsContext: "", eventsSources: [], unavailable: true });
   });
 
   test("formats a single event with [1] marker, name, date, location", async () => {
-    vi.mocked(findHealthEvents).mockResolvedValue([
-      ev({
-        name: "Women's Health Fair",
-        date: "Sat, May 10, 2026",
-        location: "Town Hall, Sydney NSW",
-        url: "https://example.com/1",
-      }),
-    ]);
+    vi.mocked(findHealthEvents).mockResolvedValue({
+      status: "ok",
+      events: [
+        ev({
+          name: "Women's Health Fair",
+          date: "Sat, May 10, 2026",
+          location: "Town Hall, Sydney NSW",
+          url: "https://example.com/1",
+        }),
+      ],
+    });
 
     const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
@@ -110,11 +122,14 @@ describe("runEventsAgent", () => {
   });
 
   test("formats multiple events with sequential markers and blank-line separators", async () => {
-    vi.mocked(findHealthEvents).mockResolvedValue([
-      ev({ name: "A", url: "https://a.com" }),
-      ev({ name: "B", url: "https://b.com" }),
-      ev({ name: "C", url: "https://c.com" }),
-    ]);
+    vi.mocked(findHealthEvents).mockResolvedValue({
+      status: "ok",
+      events: [
+        ev({ name: "A", url: "https://a.com" }),
+        ev({ name: "B", url: "https://b.com" }),
+        ev({ name: "C", url: "https://c.com" }),
+      ],
+    });
 
     const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
@@ -124,7 +139,10 @@ describe("runEventsAgent", () => {
   });
 
   test("includes description when present", async () => {
-    vi.mocked(findHealthEvents).mockResolvedValue([ev({ description: "Free screenings and Q&A" })]);
+    vi.mocked(findHealthEvents).mockResolvedValue({
+      status: "ok",
+      events: [ev({ description: "Free screenings and Q&A" })],
+    });
 
     const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
@@ -132,7 +150,10 @@ describe("runEventsAgent", () => {
   });
 
   test("omits description gracefully when null", async () => {
-    vi.mocked(findHealthEvents).mockResolvedValue([ev({ description: null, name: "T" })]);
+    vi.mocked(findHealthEvents).mockResolvedValue({
+      status: "ok",
+      events: [ev({ description: null, name: "T" })],
+    });
 
     const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
@@ -141,19 +162,23 @@ describe("runEventsAgent", () => {
   });
 
   test("uses url-keyed chunkId for citation deduplication", async () => {
-    vi.mocked(findHealthEvents).mockResolvedValue([ev({ url: "https://x.com/event-42" })]);
+    vi.mocked(findHealthEvents).mockResolvedValue({
+      status: "ok",
+      events: [ev({ url: "https://x.com/event-42" })],
+    });
 
     const result = await runEventsAgent({ userMessage: "x", city: "Sydney" });
 
     expect(result.eventsSources[0].chunkId).toBe("events:https://x.com/event-42");
   });
 
-  test("never throws — degrades to empty when tool unexpectedly throws", async () => {
+  test("never throws — degrades to unavailable when tool unexpectedly throws", async () => {
     vi.mocked(findHealthEvents).mockRejectedValueOnce(new Error("boom"));
 
     await expect(runEventsAgent({ userMessage: "x", city: "Sydney" })).resolves.toEqual({
       eventsContext: "",
       eventsSources: [],
+      unavailable: true,
     });
   });
 

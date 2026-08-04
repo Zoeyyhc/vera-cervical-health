@@ -220,6 +220,7 @@ import { recordRagGap } from "@/lib/ai/rag-gap";
 import {
   EVENTS_EMPTY_FALLBACK,
   EVENTS_NEEDS_LOCATION_FALLBACK,
+  EVENTS_UNAVAILABLE_FALLBACK,
   INJECTION_REFUSAL,
   type OrchestratorContext,
   runOrchestrator,
@@ -509,6 +510,24 @@ describe("runOrchestrator", () => {
 
     expect(runResponseAgent).not.toHaveBeenCalled();
     expect(chunks[0]).toEqual({ type: "text", text: EVENTS_EMPTY_FALLBACK });
+  });
+
+  test("events_request with upstream unavailable: yields the unavailable fallback, not the empty-results one", async () => {
+    vi.mocked(getAnthropicClient).mockReturnValue(mockAnthropicCreate("events_request") as never);
+    vi.mocked(runEventsAgent).mockResolvedValue({
+      eventsContext: "",
+      eventsSources: [],
+      unavailable: true,
+    });
+
+    const chunks = await collectOrchestrator({
+      ...baseCtx,
+      userMessage: "any events in glen waverley",
+    });
+
+    expect(runResponseAgent).not.toHaveBeenCalled();
+    expect(chunks[0]).toEqual({ type: "text", text: EVENTS_UNAVAILABLE_FALLBACK });
+    expect(chunks).not.toContainEqual(expect.objectContaining({ type: "pending_action" }));
   });
 
   test("events_request never calls runRagAgent", async () => {
