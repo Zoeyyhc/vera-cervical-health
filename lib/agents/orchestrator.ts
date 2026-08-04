@@ -111,6 +111,14 @@ export const EVENTS_NEEDS_LOCATION_FALLBACK =
 export const EVENTS_EMPTY_FALLBACK =
   "I couldn't find any upcoming health events for that location right now. Try a nearby suburb, or check back later.";
 /**
+ * Distinct from EVENTS_EMPTY_FALLBACK: this fires when the general events
+ * search itself failed (network/upstream error), not when it genuinely found
+ * nothing. Saying "I couldn't find any events" for a search we never
+ * completed would misrepresent what happened.
+ */
+export const EVENTS_UNAVAILABLE_FALLBACK =
+  "I'm having trouble reaching the events search right now. Please try again in a bit.";
+/**
  * Spec §7, matching the services path: an out-of-Victoria request gets the scope
  * explained, not a bare empty result. Saying "I couldn't find any events" to a
  * Sydney user describes a search that was never run for them.
@@ -430,10 +438,14 @@ async function* dispatchEventsRequest(
   // Nothing verified. The general events search is a genuine second look for a
   // location we have confirmed, so an empty answer from it is a real "nothing
   // found" rather than a scope failure dressed up as one.
-  const { eventsContext, eventsSources } = await runEventsAgent({
+  const { eventsContext, eventsSources, unavailable } = await runEventsAgent({
     userMessage: ctx.userMessage,
     city: location ?? "Victoria",
   });
+  if (unavailable) {
+    yield { type: "text", text: EVENTS_UNAVAILABLE_FALLBACK };
+    return;
+  }
   if (eventsSources.length === 0) {
     yield { type: "text", text: EVENTS_EMPTY_FALLBACK };
     yield { type: "pending_action", action: pending() };

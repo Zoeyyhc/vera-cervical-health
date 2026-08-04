@@ -82,9 +82,11 @@ User message
 **Events Agent** (`lib/agents/events-agent.ts`)
 - Calls `findHealthEvents` tool → proxies SerpAPI Google Events
 - Requires user location; uses `profiles.locale` as a hint if set
-- Default keywords appended: `women's health OR cervical screening OR HPV`
+- Upstream query is sent naturally (no forced boolean clause); relevance against
+  `women's health` / `cervical` / `screening` / `hpv` / `pap` is filtered locally afterward
 - Returns up to 5 upcoming events (name, date, location, URL)
-- Falls back gracefully if no events found
+- Distinguishes a genuine no-results search from an upstream failure — the orchestrator shows
+  different fallback copy for each (`EVENTS_EMPTY_FALLBACK` vs `EVENTS_UNAVAILABLE_FALLBACK`)
 
 **Location resolution** (`lib/agents/location.ts`)
 - Runs *before* dispatch and decides whether the turn has a usable location:

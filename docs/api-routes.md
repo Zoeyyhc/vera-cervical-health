@@ -108,9 +108,14 @@ asks the user to type a suburb instead of reporting an empty search.
 
 **Auth:** None  
 **Query params:** `location: string`, `q?: string`, `max?: number` (default 5)  
-**Proxied to:** SerpAPI Google Events (`SERPAPI_KEY` injected server-side)  
-**Default keywords appended:** `women's health cervical screening HPV`  
-**Response:** `HealthEvent[]` — `{ name, date, location, url, description }`
+**Proxied to:** SerpAPI Google Events (`SERPAPI_KEY` injected server-side), `gl=au&hl=en`. The
+upstream query is sent as-is (`q` or a plain `"events"` fallback) — no forced health-domain
+boolean clause, since Google Events returns nothing for those. Health relevance is filtered
+locally, against title/description/address, after the upstream call.  
+**Response:** `{ events: HealthEvent[] }` on a match, `{ events: [], error: "no_results" }` when
+the search completed but nothing relevant came back, `{ events: [], error: "upstream_unavailable" }`
+when the upstream call itself failed (network error, non-2xx, malformed JSON). `HealthEvent` is
+`{ name, date, location, url, description }`.
 
 ### `POST /api/mcp`
 

@@ -53,13 +53,36 @@ describe("GET /api/events", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns empty events + error flag on upstream 500", async () => {
+  it("returns empty events + upstream_unavailable on upstream 500", async () => {
     server.use(http.get(SERPAPI_URL, () => new HttpResponse(null, { status: 500 })));
     const res = await GET(makeRequest("/api/events?location=Sydney"));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { events: unknown[]; error?: string };
     expect(body.events).toEqual([]);
-    expect(body.error).toBe("unavailable");
+    expect(body.error).toBe("upstream_unavailable");
+  });
+
+  it("returns empty events + no_results when nothing relevant is found", async () => {
+    server.use(
+      http.get(SERPAPI_URL, () =>
+        HttpResponse.json({
+          events_results: [
+            {
+              title: "Saturday Night Concert",
+              date: { when: "May 10" },
+              address: ["Town Hall"],
+              link: "https://example.com/concert",
+              description: null,
+            },
+          ],
+        })
+      )
+    );
+    const res = await GET(makeRequest("/api/events?location=Sydney"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { events: unknown[]; error?: string };
+    expect(body.events).toEqual([]);
+    expect(body.error).toBe("no_results");
   });
 
   it("never echoes the SerpAPI key in the response", async () => {
@@ -68,7 +91,7 @@ describe("GET /api/events", () => {
         HttpResponse.json({
           events_results: [
             {
-              title: "T",
+              title: "Cervical Screening Session",
               date: { when: "May 10" },
               address: ["X"],
               link: "https://example.com/x",

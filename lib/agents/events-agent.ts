@@ -36,6 +36,12 @@ export type EventsAgentResult = {
    * generic "no events found" line.
    */
   needsLocation?: boolean;
+  /**
+   * Set when the search itself failed (network/upstream error) rather than
+   * genuinely returning nothing. The orchestrator uses this to avoid telling
+   * the user "no events found" when the truth is "couldn't search".
+   */
+  unavailable?: boolean;
 };
 
 /**
@@ -52,9 +58,9 @@ export async function runEventsAgent(ctx: EventsAgentContext): Promise<EventsAge
     return { eventsContext: "", eventsSources: [], needsLocation: true };
   }
 
-  let events: HealthEvent[] = [];
+  let result: Awaited<ReturnType<typeof findHealthEvents>>;
   try {
-    events = await findHealthEvents({
+    result = await findHealthEvents({
       location,
       query: ctx.userMessage,
       max_results: MAX_RESULTS,
@@ -64,13 +70,17 @@ export async function runEventsAgent(ctx: EventsAgentContext): Promise<EventsAge
       "[events-agent] findHealthEvents unexpectedly threw:",
       err instanceof Error ? err.message : err
     );
+    return { eventsContext: "", eventsSources: [], unavailable: true };
+  }
+
+  if (result.status === "upstream_unavailable") {
+    return { eventsContext: "", eventsSources: [], unavailable: true };
+  }
+  if (result.status === "no_results") {
     return { eventsContext: "", eventsSources: [] };
   }
 
-  if (events.length === 0) {
-    return { eventsContext: "", eventsSources: [] };
-  }
-
+  const events = result.events;
   const eventsSources: Source[] = events.map((e, i) => ({
     id: String(i + 1),
     title: e.name,

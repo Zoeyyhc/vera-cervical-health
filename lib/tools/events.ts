@@ -1,5 +1,5 @@
+import type { EventsSearchResult } from "@/lib/events/search-events";
 import { searchEventsApi } from "@/lib/events/search-events";
-import type { HealthEvent } from "@/lib/validations/events";
 
 export type FindHealthEventsInput = {
   location: string;
@@ -8,10 +8,10 @@ export type FindHealthEventsInput = {
 };
 
 /**
- * Events Agent's tool wrapper. Surfaces the same data the `/api/events` proxy
- * returns — both share `searchEventsApi`. Never throws; returns `[]` on any
- * failure (including missing location).
+ * Events Agent's tool wrapper. Surfaces the same typed result the `/api/events`
+ * proxy returns — both share `searchEventsApi`. Never throws; a missing
+ * location or any upstream failure resolves rather than rejects.
  */
-export async function findHealthEvents(input: FindHealthEventsInput): Promise<HealthEvent[]> {
+export async function findHealthEvents(input: FindHealthEventsInput): Promise<EventsSearchResult> {
   return searchEventsApi(input);
 }
